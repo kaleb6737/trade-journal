@@ -1,0 +1,264 @@
+/* ══════════════════════════════════════════════════════════════
+   RICH TEXT EDITOR (Tiptap)
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Toolbar ── */
+.re-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.re-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  user-select: none;
+}
+
+.re-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+}
+
+.re-btn--active {
+  background: rgba(212, 175, 55, 0.15) !important;
+  border-color: rgba(212, 175, 55, 0.35) !important;
+  color: var(--gold-primary) !important;
+}
+
+.re-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.re-divider {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  background: var(--border-subtle);
+  margin: 0 4px;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+/* Mic + AI dictation cluster */
+.re-dictation-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Voice dictation hint (wraps below toolbar buttons) */
+.re-dictation-hint {
+  flex-basis: 100%;
+  width: 100%;
+  font-size: 0.72rem;
+  color: var(--accent-primary);
+  padding: 4px 2px 2px;
+  line-height: 1.4;
+}
+
+/* ── Color picker ── */
+.re-color-wrap {
+  position: relative;
+}
+
+.re-color-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  flex-shrink: 0;
+}
+
+.re-color-palette {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  min-width: 120px;
+}
+
+.re-color-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.re-color-dot:hover { transform: scale(1.2); box-shadow: 0 0 0 2px rgba(255,255,255,0.3); }
+
+.re-color-dot--reset {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+/* ── ProseMirror content (editor & display) ── */
+.re-editor-content {
+  outline: none;
+  min-height: 260px;
+  padding: 20px 22px;
+  font-size: 0.9375rem;
+  line-height: 1.85;
+  color: var(--text-primary);
+  caret-color: var(--gold-primary);
+  background: transparent;
+}
+
+.re-editor-content:focus { outline: none; }
+
+/* Delegate ProseMirror wrapper */
+.re-editor-content .ProseMirror,
+.re-editor-content.ProseMirror {
+  outline: none;
+  min-height: 260px;
+}
+
+/* Headings */
+.re-editor-content h1,
+.re-editor-content h2,
+.re-editor-content h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--text-primary);
+  margin: 0.85em 0 0.35em;
+  line-height: 1.3;
+}
+
+.re-editor-content h1:first-child,
+.re-editor-content h2:first-child,
+.re-editor-content h3:first-child { margin-top: 0; }
+
+.re-editor-content h1 { font-size: 1.55rem; }
+.re-editor-content h2 { font-size: 1.25rem; }
+.re-editor-content h3 { font-size: 1.05rem; }
+
+/* Paragraphs */
+.re-editor-content p { margin: 0 0 0.55em; }
+.re-editor-content p:last-child { margin-bottom: 0; }
+
+/* Lists */
+.re-editor-content ul,
+.re-editor-content ol {
+  padding-left: 1.6em;
+  margin: 0.5em 0;
+}
+.re-editor-content li { margin: 0.2em 0; }
+.re-editor-content li > p { margin: 0; }
+
+/* Blockquote */
+.re-editor-content blockquote {
+  border-left: 3px solid var(--gold-primary);
+  margin: 0.8em 0;
+  padding: 0.6em 1em;
+  color: var(--text-secondary);
+  background: rgba(212, 175, 55, 0.06);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-style: italic;
+}
+
+/* Inline code */
+.re-editor-content code {
+  font-family: 'Space Mono', 'Courier New', monospace;
+  font-size: 0.85em;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  color: #7dd3fc;
+}
+
+/* Code block */
+.re-editor-content pre {
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 1em 1.2em;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+.re-editor-content pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.875rem;
+  color: #7dd3fc;
+}
+
+/* Highlight */
+.re-editor-content mark {
+  border-radius: 3px;
+  padding: 0 2px;
+  color: inherit;
+}
+
+/* Placeholder */
+.re-editor-content p.is-editor-empty:first-child::before,
+.re-editor-content .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  pointer-events: none;
+  float: left;
+  height: 0;
+  white-space: pre-line;
+}
+
+/* Horizontal rule */
+.re-editor-content hr {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 1em 0;
+}
+
+/* Strong / em */
+.re-editor-content strong { color: var(--text-primary); font-weight: 700; }
+.re-editor-content em     { font-style: italic; }
+.re-editor-content s      { opacity: 0.55; }
+
+/* Selection */
+.re-editor-content ::selection { background: rgba(212, 175, 55, 0.25); }
+
+/* Focus ring on wrapper */
+.notes-editor:focus-within {
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.18);
+}
+
+/* Dragging state */
+.notes-editor--dragging .notes-chart-zone {
+  border-color: var(--gold-primary) !important;
+  background: rgba(212, 175, 55, 0.07) !important;
+}

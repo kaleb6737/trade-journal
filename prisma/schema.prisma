@@ -1,0 +1,233 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Postgres (Neon). `DATABASE_URL` should be the **pooled** endpoint (ends in
+// `-pooler.<region>.aws.neon.tech`) so serverless/edge invocations share a
+// single PgBouncer pool. `DIRECT_URL` is the non-pooled endpoint and is used
+// only by `prisma migrate` for DDL (PgBouncer transaction-pooled mode can't
+// run migrations).
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  password      String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  /// Weekly email roundup preferences
+  weeklyRoundupEnabled    Boolean   @default(false)
+  weeklyRoundupEmail      String?
+  /// 0-6 => Sun-Sat (UTC)
+  weeklyRoundupDay        Int       @default(0)
+  /// 0-23 (UTC)
+  weeklyRoundupHour       Int       @default(18)
+  weeklyRoundupLastSentAt DateTime?
+
+  /// Stripe customer id (one per user, created on first checkout).
+  stripeCustomerId String? @unique
+  /// Materialized plan for quick lookups (FREE | PRO | ULTIMATE). Source of truth is `subscription`.
+  plan             String  @default("FREE")
+
+  accounts      TradingAccount[]
+  trades        Trade[]
+  playbooks     Playbook[]
+  tags          Tag[]
+  sessions      Session[]
+  weeklyRoundups WeeklyRoundupLog[]
+  subscription  Subscription?
+  deskWisdomLikes DeskWisdomLike[]
+}
+
+/// User-saved favorites from the dashboard "Desk wisdom" quote deck (`quoteId` indexes `deskWisdomData`).
+model DeskWisdomLike {
+  id        String   @id @default(cuid())
+  userId    String
+  quoteId   Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, quoteId])
+  @@index([userId])
+}
+
+/// One active subscription per user. Updated by Stripe webhooks.
+model Subscription {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  stripeSubscriptionId  String    @unique
+  stripeCustomerId      String
+  stripePriceId         String
+  plan                  String    // PRO | ULTIMATE
+  interval              String    // month | year
+  status                String    // active | trialing | past_due | canceled | incomplete | ...
+  currentPeriodEnd      DateTime?
+  cancelAtPeriodEnd     Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([stripeCustomerId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TradingAccount {
+  id             String   @id @default(cuid())
+  userId         String
+  name           String
+  broker         String   @default("Manual")
+  currency       String   @default("USD")
+  initialBalance Decimal @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  /// Alpaca API key id (not secret)
+  alpacaKeyId          String?
+  /// AES-GCM encrypted secret
+  alpacaSecretEnc      String?
+  alpacaPaper          Boolean  @default(true)
+
+  /// Tradovate login + API app credentials (cid/sec from API Access in Tradovate)
+  tradovateName         String?
+  tradovatePasswordEnc  String?
+  tradovateCid          Int?
+  tradovateSecEnc       String?
+  tradovateDemo         Boolean  @default(true)
+  tradovateDeviceId     String?
+
+  /// OAuth (redirect login at trader.tradovate.com) — access token encrypted; renew before expiry
+  tradovateOAuthAccessEnc   String?
+  tradovateOAuthExpiresAt   DateTime?
+
+  lastBrokerSyncAt     DateTime?
+  lastBrokerSyncError  String?
+
+  /// Background sync via /api/cron/broker-sync (CRON_SECRET). Alpaca & Tradovate only.
+  brokerAutoSyncEnabled Boolean @default(true)
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trades         Trade[]
+}
+
+model Trade {
+  id             String    @id @default(cuid())
+  userId         String
+  accountId      String?
+  playbookId     String?
+
+  symbol         String
+  side           String    // LONG | SHORT
+  assetType      String    @default("STOCK") // STOCK | OPTIONS | FOREX | FUTURES | CRYPTO
+  status         String    @default("CLOSED") // OPEN | CLOSED
+
+  entryDate      DateTime
+  exitDate       DateTime?
+  /// Canonical "when this trade counts" for analytics (exit if set, else entry).
+  occurredAt     DateTime?
+
+  entryPrice     Decimal
+  exitPrice      Decimal?
+  quantity       Decimal
+  commission     Decimal @default(0)
+  fees           Decimal @default(0)
+
+  stopLoss       Decimal?
+  takeProfit     Decimal?
+
+  grossPnl       Decimal?
+  netPnl         Decimal?
+  returnPercent  Decimal?
+
+  tags           String    @default("[]") // JSON array of tag names
+  notes          String?
+  mistakes       String    @default("[]") // JSON array
+  screenshotUrl  String?
+
+  /// Idempotent key for broker imports (e.g. alpaca:sha256...). Use null for manual trades.
+  externalRef    String?
+
+  tradeSession   String?   // Asian, London, New York, etc.
+
+  /// Post-trade emotional check-in (1=out of control, 5=fully focused)
+  emotionScore   Int?
+  /// JSON array of emotion tags e.g. ["Fear","FOMO","Disciplined"]
+  emotionTags    String    @default("[]")
+
+  /// When true, trade is omitted from journal list, analytics, and dashboard by default (soft-hide).
+  hidden         Boolean   @default(false)
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account        TradingAccount?  @relation(fields: [accountId], references: [id])
+  playbook       Playbook?        @relation(fields: [playbookId], references: [id])
+
+  @@unique([userId, externalRef])
+}
+
+model Playbook {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  rules       String   @default("[]") // JSON array of rule strings
+  color       String   @default("#D4AF37")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trades      Trade[]
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String   @default("#D4AF37")
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+}
+
+model WeeklyRoundupLog {
+  id               String   @id @default(cuid())
+  userId           String
+  email            String
+  subject          String
+  periodStart      DateTime
+  periodEnd        DateTime
+  createdTrades    Int      @default(0)
+  winners          Int      @default(0)
+  losers           Int      @default(0)
+  netPnl           Decimal @default(0)
+  summaryText      String
+  reflectionPrompt String
+  aiAnalysis       String?
+  sentAt           DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sentAt])
+}
