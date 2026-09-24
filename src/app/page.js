@@ -4,10 +4,11 @@ import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion'
 import { BrandMonogram, BrandWordmark } from '@/components/BrandWordmark'
+import { PLAN_DISPLAY } from '@/lib/plans'
 import {
   BookOpen, BarChart3, Target, Tags, Calendar, Wallet, TrendingUp,
   ArrowRight, Check, Shield, Sparkles, ChevronDown, Activity, Layers,
-  Repeat, Trophy, Flame, X, Star, Users, Award, TrendingDown, Clock,
+  Repeat, Trophy, Flame, Star, Users, Award, TrendingDown, Clock,
   Zap, Lock, Settings, BrainCircuit
 } from 'lucide-react'
 
@@ -19,6 +20,13 @@ const STAGGER = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.1 } },
 }
+
+// Monthly-equivalent price when billed yearly, derived from the same
+// PLAN_DISPLAY data Stripe checkout and /pricing use — keeps the landing
+// page from drifting out of sync with what customers are actually charged.
+const monthlyEquivalent = (d) => Math.round(d.yearlyPriceUsd / 12)
+const yearlySavingsUsd = (d) => d.monthlyPriceUsd * 12 - d.yearlyPriceUsd
+const yearlySavingsPct = (d) => Math.round((yearlySavingsUsd(d) / (d.monthlyPriceUsd * 12)) * 100)
 
 function useScrolled(threshold = 24) {
   const [scrolled, setScrolled] = useState(false)
@@ -513,7 +521,7 @@ export default function LandingPage() {
           <motion.div variants={FADE_UP} className="lp-pricing-toggle">
             <button onClick={() => setIsYearly(false)} className={`lp-toggle-btn${!isYearly ? ' active' : ''}`}>Monthly</button>
             <button onClick={() => setIsYearly(true)} className={`lp-toggle-btn${isYearly ? ' active' : ''}`}>
-              Yearly <span className="lp-toggle-badge">Save 17%</span>
+              Yearly <span className="lp-toggle-badge">Save {yearlySavingsPct(PLAN_DISPLAY.PRO)}%</span>
             </button>
           </motion.div>
         </motion.div>
@@ -521,29 +529,26 @@ export default function LandingPage() {
         <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={STAGGER} className="lp-pricing-grid">
           <motion.div variants={FADE_UP} className="lp-price-card">
             <div className="lp-price-tier">PRO</div>
-            <p className="lp-price-desc">Best for developing traders</p>
-            <div className="lp-price-amount"><span className="lp-price-dollar">$</span><span className="lp-price-num">{isYearly ? '20' : '24'}</span><span className="lp-price-per">/mo</span></div>
-            {isYearly && <div className="lp-price-annual">billed $240 / year</div>}
+            <p className="lp-price-desc">{PLAN_DISPLAY.PRO.tagline}</p>
+            <div className="lp-price-amount"><span className="lp-price-dollar">$</span><span className="lp-price-num">{isYearly ? monthlyEquivalent(PLAN_DISPLAY.PRO) : PLAN_DISPLAY.PRO.monthlyPriceUsd}</span><span className="lp-price-per">/mo</span></div>
+            {isYearly && <div className="lp-price-annual">billed ${PLAN_DISPLAY.PRO.yearlyPriceUsd} / year</div>}
             <Link href={`/pricing?plan=PRO&interval=${isYearly ? 'year' : 'month'}&auto=1`} className="lp-price-btn">Get Pro</Link>
             <ul className="lp-price-features">
-              {['Manual journaling & CSV import', 'Basic dashboard & analytics', 'Up to 3 playbooks', 'Essence score tracking'].map(f => (
+              {PLAN_DISPLAY.PRO.highlights.map(f => (
                 <li key={f}><Check size={16} style={{ color: 'var(--green)' }} />{f}</li>
-              ))}
-              {['API broker sync', 'Unlimited accounts'].map(f => (
-                <li key={f} className="lp-feature-off"><X size={16} />{f}</li>
               ))}
             </ul>
           </motion.div>
 
           <motion.div variants={FADE_UP} className="lp-price-card lp-price-card--featured">
-            {isYearly && <div className="lp-price-badge">SAVE $120</div>}
+            {isYearly && <div className="lp-price-badge">SAVE ${yearlySavingsUsd(PLAN_DISPLAY.ULTIMATE)}</div>}
             <div className="lp-price-tier" style={{ color: 'var(--gold-primary)' }}>ULTIMATE</div>
-            <p className="lp-price-desc">Best for advanced traders</p>
-            <div className="lp-price-amount"><span className="lp-price-dollar">$</span><span className="lp-price-num">{isYearly ? '35' : '45'}</span><span className="lp-price-per">/mo</span></div>
-            {isYearly && <div className="lp-price-annual">billed $420 / year</div>}
+            <p className="lp-price-desc">{PLAN_DISPLAY.ULTIMATE.tagline}</p>
+            <div className="lp-price-amount"><span className="lp-price-dollar">$</span><span className="lp-price-num">{isYearly ? monthlyEquivalent(PLAN_DISPLAY.ULTIMATE) : PLAN_DISPLAY.ULTIMATE.monthlyPriceUsd}</span><span className="lp-price-per">/mo</span></div>
+            {isYearly && <div className="lp-price-annual">billed ${PLAN_DISPLAY.ULTIMATE.yearlyPriceUsd} / year</div>}
             <Link href={`/pricing?plan=ULTIMATE&interval=${isYearly ? 'year' : 'month'}&auto=1`} className="lp-price-btn lp-price-btn--gold">Get Ultimate</Link>
             <ul className="lp-price-features">
-              {['Everything in PRO', 'Real-time API broker sync', 'Unlimited accounts & playbooks', 'Advanced heatmaps & filters', 'Automated weekly review emails', 'Priority Discord support'].map(f => (
+              {PLAN_DISPLAY.ULTIMATE.highlights.map(f => (
                 <li key={f}><Check size={16} style={{ color: 'var(--gold-primary)' }} />{f}</li>
               ))}
             </ul>
