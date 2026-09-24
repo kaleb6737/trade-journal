@@ -162,8 +162,8 @@ export default function DashboardPage() {
                 <LineChart data={equityCurve}>
                   <defs>
                     <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#E8C66A" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#E8C66A" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="var(--border-subtle)" strokeDasharray="3 3" vertical={false} />
@@ -173,10 +173,10 @@ export default function DashboardPage() {
                   <Line
                     type="monotone"
                     dataKey="value"
-                    stroke="#D4AF37"
+                    stroke="#E8C66A"
                     strokeWidth={2.5}
                     dot={false}
-                    activeDot={{ r: 5, fill: '#D4AF37', stroke: '#000', strokeWidth: 2 }}
+                    activeDot={{ r: 5, fill: '#E8C66A', stroke: '#000', strokeWidth: 2 }}
                   />
                 </LineChart>
               </ResponsiveContainer>

@@ -26,7 +26,7 @@ const SECTION = {
   strength: { color: '#22c55e', border: 'rgba(34,197,94,0.25)',  left: '#22c55e', bg: 'rgba(34,197,94,0.04)',  hdr: 'rgba(34,197,94,0.1)' },
   mistake:  { color: '#ef4444', border: 'rgba(239,68,68,0.25)',  left: '#ef4444', bg: 'rgba(239,68,68,0.04)',  hdr: 'rgba(239,68,68,0.1)' },
   pattern:  { color: '#eab308', border: 'rgba(234,179,8,0.25)',  left: '#eab308', bg: 'rgba(234,179,8,0.04)',  hdr: 'rgba(234,179,8,0.1)' },
-  focus:    { color: '#d4af37', border: 'rgba(212,175,55,0.25)', left: '#d4af37', bg: 'rgba(212,175,55,0.04)', hdr: 'rgba(212,175,55,0.1)' },
+  focus:    { color: '#E8C66A', border: 'rgba(232, 198, 106,0.25)', left: '#E8C66A', bg: 'rgba(232, 198, 106,0.04)', hdr: 'rgba(232, 198, 106,0.1)' },
   mindset:  { color: '#a855f7', border: 'rgba(168,85,247,0.25)', left: '#a855f7', bg: 'rgba(168,85,247,0.04)', hdr: 'rgba(168,85,247,0.1)' },
 }
 
@@ -52,8 +52,8 @@ function useCountUp(target, { duration = 900, decimals = 0 } = {}) {
 function gradeInfo(winRate, pnl) {
   if (winRate >= 70 && pnl > 0) return { g: 'A+', c: '#22c55e', l: 'Outstanding' }
   if (winRate >= 60 && pnl > 0) return { g: 'A',  c: '#22c55e', l: 'Excellent' }
-  if (winRate >= 50 && pnl > 0) return { g: 'B+', c: '#d4af37', l: 'Good week' }
-  if (winRate >= 50)            return { g: 'B',  c: '#d4af37', l: 'Decent' }
+  if (winRate >= 50 && pnl > 0) return { g: 'B+', c: '#E8C66A', l: 'Good week' }
+  if (winRate >= 50)            return { g: 'B',  c: '#E8C66A', l: 'Decent' }
   if (winRate >= 40)            return { g: 'C',  c: '#f97316', l: 'Needs work' }
   return                               { g: 'D',  c: '#ef4444', l: 'Struggling' }
 }
@@ -114,7 +114,7 @@ function AiSection({ type, icon: Icon, title, items, text, open, onToggle }) {
                 <div key={i} style={{ display: 'flex', gap: 10 }}><div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}><X size={11} color="#ef4444" strokeWidth={2.5} /></div><p style={{ margin: 0, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.65 }}>{t}</p></div>
               ))}</div>}
               {items && type === 'focus' && <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{items.map((t, i) => (
-                <div key={i} style={{ display: 'flex', gap: 10 }}><div style={{ width: 20, height: 20, borderRadius: 5, border: '2px solid #d4af37', flexShrink: 0, marginTop: 2 }} /><p style={{ margin: 0, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.65 }}>{t}</p></div>
+                <div key={i} style={{ display: 'flex', gap: 10 }}><div style={{ width: 20, height: 20, borderRadius: 5, border: '2px solid #E8C66A', flexShrink: 0, marginTop: 2 }} /><p style={{ margin: 0, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.65 }}>{t}</p></div>
               ))}</div>}
               {text && <div style={{ position: 'relative', paddingTop: 6 }}><div style={{ fontSize: 42, color: `${s.color}30`, lineHeight: 0.6, marginBottom: 8, fontFamily: 'Georgia, serif' }}>"</div><p style={{ margin: 0, fontSize: 15, fontStyle: 'italic', color: 'var(--text-primary)', lineHeight: 1.75 }}>{text}"</p></div>}
             </div>
@@ -235,7 +235,7 @@ export default function WeeklyRoundupPage() {
 
       {!log ? (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="card" style={{ textAlign: 'center', padding: '80px 40px' }}>
-          <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}><Brain size={34} style={{ color: 'var(--gold-primary)' }} /></div>
+          <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(232, 198, 106,0.1)', border: '1px solid rgba(232, 198, 106,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}><Brain size={34} style={{ color: 'var(--gold-primary)' }} /></div>
           <h2 style={{ marginBottom: 10, fontFamily: 'Space Grotesk' }}>No round-up yet</h2>
           <p style={{ color: 'var(--text-muted)', maxWidth: 380, margin: '0 auto 28px' }}>Generate your first AI-powered weekly coaching session reviewing all trades, notes and emotions from the past 7 days.</p>
           <button onClick={generate} disabled={generating} className="btn btn-primary" style={{ justifyContent: 'center' }}>{generating ? 'Generating…' : <><Sparkles size={15} /> Generate my first round-up</>}</button>
@@ -329,7 +329,7 @@ export default function WeeklyRoundupPage() {
                       <Brain size={15} style={{ color: 'var(--gold-primary)' }} />
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>AI Coaching Report</span>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>Generated {new Date(log.sentAt).toLocaleString()}</span>
-                      <div style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 20, background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.2)', fontSize: 11, color: 'var(--gold-primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Zap size={10} /> Groq</div>
+                      <div style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 20, background: 'rgba(232, 198, 106,0.1)', border: '1px solid rgba(232, 198, 106,0.2)', fontSize: 11, color: 'var(--gold-primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Zap size={10} /> Groq</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {ai.strengths?.length > 0 && <AiSection type="strength" icon={TrendingUp}  title="What you did well"   items={ai.strengths} open={openSections.strength} onToggle={() => toggleSection('strength')} />}
@@ -364,7 +364,7 @@ export default function WeeklyRoundupPage() {
                   {reflectionLines.length > 0 ? reflectionLines.map((q, i) => (
                     <div key={i} className="card">
                       <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-                        <div style={{ width: 24, height: 24, borderRadius: 6, background: 'rgba(212,175,55,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}><span style={{ fontSize: 11, fontWeight: 800, color: 'var(--gold-primary)' }}>{i + 1}</span></div>
+                        <div style={{ width: 24, height: 24, borderRadius: 6, background: 'rgba(232, 198, 106,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}><span style={{ fontSize: 11, fontWeight: 800, color: 'var(--gold-primary)' }}>{i + 1}</span></div>
                         <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.65 }}>{q}</p>
                       </div>
                       <textarea value={reflections[i] || ''} onChange={e => setReflections(prev => ({ ...prev, [i]: e.target.value }))} placeholder="Write your reflection here…" rows={3} style={{ width: '100%', padding: '10px 12px', borderRadius: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', color: 'var(--text-primary)', fontSize: 14, lineHeight: 1.55, resize: 'vertical', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />

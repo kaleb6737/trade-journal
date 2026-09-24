@@ -1,0 +1,15 @@
+{
+  "id": "session-1786543884130",
+  "startedAt": "2026-08-12T14:11:24.130Z",
+  "platform": "darwin",
+  "cwd": "/Users/hacked_dinho/.gemini/antigravity/scratch/trading-journal",
+  "context": {},
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "endedAt": "2026-08-12T14:31:32.425Z",
+  "duration": 1208297
+}

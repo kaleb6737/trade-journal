@@ -73,7 +73,7 @@ export default function BillingCard() {
             width: 44,
             height: 44,
             borderRadius: 10,
-            background: plan === 'FREE' ? 'rgba(255,255,255,0.05)' : 'rgba(212,175,55,0.12)',
+            background: plan === 'FREE' ? 'rgba(255,255,255,0.05)' : 'rgba(232, 198, 106,0.12)',
             color: plan === 'FREE' ? 'var(--text-secondary)' : 'var(--gold-primary)',
             display: 'flex',
             alignItems: 'center',

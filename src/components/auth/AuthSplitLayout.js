@@ -40,7 +40,7 @@ export default function AuthSplitLayout({ children }) {
           </li>
           <li>
             <Check size={18} strokeWidth={2.5} className="auth-split-check-icon" aria-hidden />
-            <span>Black, gold, and teal — same premium shell as the marketing site.</span>
+            <span>Black and champagne gold — the same palette as the marketing site.</span>
           </li>
         </ul>
 

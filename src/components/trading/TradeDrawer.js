@@ -124,7 +124,7 @@ export default function TradeDrawer({ tradeId, onClose, onUpdate }) {
       const res = await fetch('/api/playbooks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newPlaybookName.trim(), color: '#D4AF37' })
+        body: JSON.stringify({ name: newPlaybookName.trim(), color: '#E8C66A' })
       })
       if (res.ok) {
         const { playbook } = await res.json()

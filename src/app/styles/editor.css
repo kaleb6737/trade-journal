@@ -39,8 +39,8 @@
 }
 
 .re-btn--active {
-  background: rgba(212, 175, 55, 0.15) !important;
-  border-color: rgba(212, 175, 55, 0.35) !important;
+  background: rgba(232, 198, 106, 0.15) !important;
+  border-color: rgba(232, 198, 106, 0.35) !important;
   color: var(--gold-primary) !important;
 }
 
@@ -186,7 +186,7 @@
   margin: 0.8em 0;
   padding: 0.6em 1em;
   color: var(--text-secondary);
-  background: rgba(212, 175, 55, 0.06);
+  background: rgba(232, 198, 106, 0.06);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   font-style: italic;
 }
@@ -250,15 +250,15 @@
 .re-editor-content s      { opacity: 0.55; }
 
 /* Selection */
-.re-editor-content ::selection { background: rgba(212, 175, 55, 0.25); }
+.re-editor-content ::selection { background: rgba(232, 198, 106, 0.25); }
 
 /* Focus ring on wrapper */
 .notes-editor:focus-within {
-  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.18);
+  box-shadow: 0 0 0 2px rgba(232, 198, 106, 0.18);
 }
 
 /* Dragging state */
 .notes-editor--dragging .notes-chart-zone {
   border-color: var(--gold-primary) !important;
-  background: rgba(212, 175, 55, 0.07) !important;
+  background: rgba(232, 198, 106, 0.07) !important;
 }

@@ -92,6 +92,8 @@ export function priceIdFor(plan, interval) {
 export function planFromPriceId(priceId) {
   if (!priceId) return null
   const map = {
+    [process.env.STRIPE_PRICE_ESSENCE_MONTHLY || '']: { plan: 'ULTIMATE', interval: 'month' },
+    [process.env.STRIPE_PRICE_ESSENCE_YEARLY || '']: { plan: 'ULTIMATE', interval: 'year' },
     [process.env.STRIPE_PRICE_PRO_MONTHLY || '']:      { plan: 'PRO',      interval: 'month' },
     [process.env.STRIPE_PRICE_PRO_YEARLY || '']:       { plan: 'PRO',      interval: 'year' },
     [process.env.STRIPE_PRICE_ULTIMATE_MONTHLY || '']: { plan: 'ULTIMATE', interval: 'month' },

@@ -20,7 +20,7 @@ export default function PaywallScreen({ plan = 'FREE' }) {
           flexDirection: 'column',
           gap: 18,
           border: '1px solid var(--gold-primary)',
-          boxShadow: '0 10px 40px -20px rgba(212,175,55,0.45)',
+          boxShadow: '0 10px 40px -20px rgba(232, 198, 106,0.45)',
           position: 'relative',
         }}
       >

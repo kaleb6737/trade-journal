@@ -11,7 +11,7 @@ import { formatCurrency, formatPercent, computeStats, buildEquityCurve, buildDay
 import { tradesForAggregations } from '@/lib/tradePrivacy'
 import { TrendingUp, TrendingDown, Activity, Target, Award, BookOpen } from 'lucide-react'
 
-const CHART_COLORS = ['#D4AF37', '#22C55E', '#3B82F6', '#8B5CF6', '#EC4899', '#F97316', '#06B6D4']
+const CHART_COLORS = ['#E8C66A', '#22C55E', '#3B82F6', '#8B5CF6', '#EC4899', '#F97316', '#06B6D4']
 
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
@@ -272,15 +272,15 @@ export default function AnalyticsPage() {
                 <AreaChart data={equityCurve}>
                   <defs>
                     <linearGradient id="areaGold" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#D4AF37" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#E8C66A" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#E8C66A" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="var(--border-subtle)" strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="value" stroke="#D4AF37" strokeWidth={2.5} fill="url(#areaGold)" />
+                  <Area type="monotone" dataKey="value" stroke="#E8C66A" strokeWidth={2.5} fill="url(#areaGold)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -337,7 +337,7 @@ export default function AnalyticsPage() {
 
         {tab === 'playbooks' && closed.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div className="chart-card" style={{ borderColor: 'rgba(212, 175, 55, 0.2)', background: 'linear-gradient(180deg, rgba(212, 175, 55, 0.04) 0%, var(--bg-card) 45%)' }}>
+            <div className="chart-card" style={{ borderColor: 'rgba(232, 198, 106, 0.2)', background: 'linear-gradient(180deg, rgba(232, 198, 106, 0.04) 0%, var(--bg-card) 45%)' }}>
               <div className="flex items-center gap-3" style={{ marginBottom: 8 }}>
                 <div className="empty-icon-wrap" style={{ width: 44, height: 44, borderRadius: 12 }}>
                   <BookOpen size={22} strokeWidth={2} />

@@ -8,6 +8,9 @@
  *   STRIPE_SECRET_KEY=sk_test_... node scripts/stripe-setup.mjs
  *
  * Output: 4 price IDs. Paste them into .env.local.
+ * Full-access offer: node scripts/stripe-setup.mjs --essence
+ * Creates/reuses $15 monthly, $99 yearly, and a $40 first-invoice coupon.
+ * This does not activate the launch window or change any subscription.
  */
 import Stripe from 'stripe'
 import fs from 'node:fs'
@@ -33,9 +36,16 @@ if (!key.startsWith('sk_test_')) {
   process.exit(1)
 }
 
-const stripe = new Stripe(key, { apiVersion: '2026-01-28.clover' })
+const stripe = new Stripe(key, { apiVersion: '2026-01-28.clover', timeout: 15000, maxNetworkRetries: 1 })
+const essence = process.argv.includes('--essence')
 
-const PLANS = [
+const PLANS = essence ? [{
+  key: 'ESSENCE',
+  name: 'TradeXEssence Full Access',
+  description: 'Full-access trading journal, analytics, playbooks, CSV imports and multiple accounts.',
+  monthly: 1500,
+  yearly: 9900,
+}] : [
   {
     key: 'PRO',
     name: 'TradeXEssence Pro',
@@ -60,7 +70,7 @@ async function findOrCreateProduct(name, description) {
     console.log(`· found product ${name} -> ${match.id}`)
     return match
   }
-  const p = await stripe.products.create({ name, description })
+  const p = await stripe.products.create({ name, description }, { idempotencyKey: `setup-product-${name.replace(/\s+/g, '-').toLowerCase()}` })
   console.log(`· created product ${name} -> ${p.id}`)
   return p
 }
@@ -71,7 +81,9 @@ async function findOrCreatePrice(productId, amount, interval) {
     (x) =>
       x.unit_amount === amount &&
       x.currency === 'usd' &&
-      x.recurring?.interval === interval,
+      x.recurring?.interval === interval &&
+      x.recurring?.interval_count === 1 &&
+      x.recurring?.usage_type === 'licensed',
   )
   if (match) {
     console.log(`  · found $${amount / 100}/${interval} -> ${match.id}`)
@@ -82,7 +94,7 @@ async function findOrCreatePrice(productId, amount, interval) {
     unit_amount: amount,
     currency: 'usd',
     recurring: { interval },
-  })
+  }, { idempotencyKey: `setup-price-${productId}-${amount}-${interval}` })
   console.log(`  · created $${amount / 100}/${interval} -> ${price.id}`)
   return price
 }
@@ -94,6 +106,21 @@ for (const p of PLANS) {
   const yearly = await findOrCreatePrice(product.id, p.yearly, 'year')
   out[`STRIPE_PRICE_${p.key}_MONTHLY`] = monthly.id
   out[`STRIPE_PRICE_${p.key}_YEARLY`] = yearly.id
+  if (essence) {
+    const id = 'tradexessence-founding-40-usd-once'
+    let coupon
+    try { coupon = await stripe.coupons.retrieve(id) }
+    catch (e) { if (e.code !== 'resource_missing') throw e }
+    if (!coupon) coupon = await stripe.coupons.create({
+      id, name: 'Founding year: $59, then $99/year',
+      duration: 'once', currency: 'usd', amount_off: 4000,
+      applies_to: { products: [product.id] },
+    }, { idempotencyKey: `setup-coupon-${id}` })
+    if (!coupon.valid || coupon.currency !== 'usd' || coupon.amount_off !== 4000 || coupon.duration !== 'once' || !coupon.applies_to?.products?.includes(product.id)) {
+      throw new Error('Existing founding coupon does not match the offer. No coupon was changed.')
+    }
+    out.STRIPE_COUPON_ESSENCE_FOUNDING = coupon.id
+  }
 }
 
 console.log('\n─── Add these to .env.local ───')

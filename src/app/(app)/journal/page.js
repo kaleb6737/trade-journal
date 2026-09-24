@@ -8,8 +8,11 @@ import { formatCurrency, formatDate, formatPercent, parseTags, ASSET_TYPES, toMo
 import { Plus, Search, Upload, Trash2, Edit, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { PRIVATE_TRADE_LABEL } from '@/lib/tradePrivacy'
 import Papa from 'papaparse'
+import dynamic from 'next/dynamic'
 import TradeDrawer from '@/components/trading/TradeDrawer'
 import { EmotionModal } from '@/components/trading/EmotionCheckIn'
+
+const CsvImportWizard = dynamic(() => import('@/components/trading/CsvImportWizard'), { ssr: false })
 
 function JournalPageContent() {
   const searchParams = useSearchParams()
@@ -404,10 +407,11 @@ function JournalPageContent() {
 
       {/* CSV Import Modal */}
       {showImport && (
-        <ImportModal
+        <CsvImportWizard
           onClose={() => setShowImport(false)}
           onImport={fetchTrades}
           onEmotionRate={(ids) => setEmotionTradeIds(ids)}
+          renderTradovate={(onBack) => <ImportModal onClose={() => setShowImport(false)} onBack={onBack} onImport={fetchTrades} onEmotionRate={(ids) => setEmotionTradeIds(ids)} />}
         />
       )}
       {emotionTradeIds && (
@@ -428,7 +432,7 @@ export default function JournalPage() {
   )
 }
 
-function ImportModal({ onClose, onImport, onEmotionRate }) {
+function ImportModal({ onClose, onImport, onEmotionRate, onBack }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState([])
   const [loading, setLoading] = useState(false)
@@ -548,16 +552,17 @@ function ImportModal({ onClose, onImport, onEmotionRate }) {
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="modal">
         <div className="modal-header">
-          <h2 className="modal-title">Import Trades from CSV</h2>
+          <h2 className="modal-title">Import Tradovate CSV</h2>
           <button onClick={onClose} className="btn btn-ghost btn-icon">✕</button>
         </div>
 
         {!result ? (
           <>
             <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 20 }}>
-              Upload a CSV file from your broker. Tradovate performance exports are fully supported. We also auto-detect columns for Symbol, Entry/Exit Price, Quantity, Dates, and P&L.
+              Upload your Tradovate performance CSV using the existing importer.
             </p>
             <div className="form-group" style={{ marginBottom: 16 }}>
+              <button type="button" className="btn btn-secondary" disabled={loading} onClick={onBack}>← Choose another platform</button>
               <label className="form-label">CSV File</label>
               <input id="csv-upload" type="file" accept=".csv" onChange={handleFile}
                 style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)', borderRadius: 8, padding: 12, color: 'var(--text-primary)', fontSize: 14, width: '100%' }} />

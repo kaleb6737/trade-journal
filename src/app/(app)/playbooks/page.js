@@ -21,7 +21,7 @@ export default function PlaybooksPage() {
     fetch_()
   }
 
-  const COLORS = ['#D4AF37', '#22C55E', '#3B82F6', '#8B5CF6', '#EC4899', '#F97316', '#EF4444', '#06B6D4']
+  const COLORS = ['#E8C66A', '#22C55E', '#3B82F6', '#8B5CF6', '#EC4899', '#F97316', '#EF4444', '#06B6D4']
 
   return (
     <>
@@ -133,7 +133,7 @@ function PlaybookDetail({ playbook, onClose }) {
 function PlaybookModal({ editing, colors, onClose, onSave }) {
   const [form, setForm] = useState({
     name: editing?.name || '', description: editing?.description || '',
-    color: editing?.color || '#D4AF37',
+    color: editing?.color || '#E8C66A',
     rules: (() => { try { return JSON.parse(editing?.rules || '[]') } catch { return [] } })(),
     ruleInput: '',
   })

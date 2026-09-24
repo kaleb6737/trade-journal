@@ -157,9 +157,9 @@ export default function SettingsPage() {
                           className="badge"
                           style={{
                             marginTop: 6,
-                            background: isPaid ? 'var(--gold-muted, rgba(212,175,55,0.15))' : 'rgba(148,163,184,0.12)',
+                            background: isPaid ? 'var(--gold-muted, rgba(232, 198, 106,0.15))' : 'rgba(148,163,184,0.12)',
                             color: isPaid ? 'var(--gold-primary)' : 'var(--text-muted)',
-                            border: `1px solid ${isPaid ? 'rgba(212,175,55,0.35)' : 'var(--border-subtle)'}`,
+                            border: `1px solid ${isPaid ? 'rgba(232, 198, 106,0.35)' : 'var(--border-subtle)'}`,
                           }}
                         >
                           {isPaid ? `${displayName} plan${intervalLabel}` : 'Free account'}

@@ -74,7 +74,7 @@ function Btn({ onClick, active, disabled, title, children }) {
 }
 
 const HIGHLIGHT_COLORS = [
-  { color: 'rgba(212,175,55,0.38)',  label: 'Gold'   },
+  { color: 'rgba(232, 198, 106,0.38)',  label: 'Gold'   },
   { color: 'rgba(34,197,94,0.32)',   label: 'Green'  },
   { color: 'rgba(239,68,68,0.32)',   label: 'Red'    },
   { color: 'rgba(59,130,246,0.35)',  label: 'Blue'   },
@@ -84,7 +84,7 @@ const HIGHLIGHT_COLORS = [
 
 const TEXT_COLORS = [
   { color: '#F5F5F5', label: 'White'   },
-  { color: '#D4AF37', label: 'Gold'    },
+  { color: '#E8C66A', label: 'Gold'    },
   { color: '#22C55E', label: 'Green'   },
   { color: '#EF4444', label: 'Red'     },
   { color: '#3B82F6', label: 'Blue'    },
@@ -107,7 +107,7 @@ function ColorPicker({ onSelect, currentColor, type }) {
         {type === 'highlight' ? <Highlighter size={14} /> : <Type size={14} />}
         <span
           className="re-color-swatch"
-          style={{ background: currentColor || (type === 'highlight' ? 'rgba(212,175,55,0.38)' : '#F5F5F5') }}
+          style={{ background: currentColor || (type === 'highlight' ? 'rgba(232, 198, 106,0.38)' : '#F5F5F5') }}
         />
       </Btn>
       {open && (

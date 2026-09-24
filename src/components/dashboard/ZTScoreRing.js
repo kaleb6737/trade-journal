@@ -13,17 +13,17 @@ export default function ZTScoreRing({ score }) {
       : score >= 70
         ? '#22C55E'
         : score >= 40
-          ? '#D4AF37'
+          ? '#E8C66A'
           : '#EF4444'
-  const strokeColor = score >= 70 ? '#22C55E' : score >= 40 ? '#D4AF37' : '#EF4444'
+  const strokeColor = score >= 70 ? '#22C55E' : score >= 40 ? '#E8C66A' : '#EF4444'
 
   return (
     <div className="score-ring-visual" role="img" aria-label={`Essence score ${score} out of 100`}>
       <svg width="88" height="88" viewBox="0 0 88 88">
         <defs>
           <linearGradient id={`essenceGrad-${gradId}`} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#D4AF37" />
-            <stop offset="100%" stopColor="#2DD4BF" />
+            <stop offset="0%" stopColor="#E8C66A" />
+            <stop offset="100%" stopColor="#FFF0BB" />
           </linearGradient>
         </defs>
         <circle cx="44" cy="44" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="7" />

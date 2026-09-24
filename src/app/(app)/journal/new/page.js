@@ -74,7 +74,7 @@ export default function NewTradePage() {
       const res = await fetch('/api/playbooks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newPlaybookName.trim(), color: '#D4AF37' })
+        body: JSON.stringify({ name: newPlaybookName.trim(), color: '#E8C66A' })
       })
       if (res.ok) {
         const { playbook } = await res.json()
@@ -273,8 +273,8 @@ export default function NewTradePage() {
                     return (
                     <div style={{
                       marginTop: 12, padding: 12,
-                      background: isWin ? 'var(--green-muted)' : isLoss ? 'var(--red-muted)' : 'rgba(212, 175, 55, 0.08)',
-                      borderRadius: 8, border: `1px solid ${isWin ? 'rgba(34,197,94,0.3)' : isLoss ? 'rgba(239,68,68,0.3)' : 'rgba(212,175,55,0.28)'}`,
+                      background: isWin ? 'var(--green-muted)' : isLoss ? 'var(--red-muted)' : 'rgba(232, 198, 106, 0.08)',
+                      borderRadius: 8, border: `1px solid ${isWin ? 'rgba(34,197,94,0.3)' : isLoss ? 'rgba(239,68,68,0.3)' : 'rgba(232, 198, 106,0.28)'}`,
                     }}>
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>
                         {useManualPnl ? 'Manual Net P&L' : 'Estimated Net P&L'}

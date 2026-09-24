@@ -55,7 +55,7 @@ export default function Sidebar({ isCollapsed, onToggle, isMobileOpen, onMobileC
       />
       <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}>
       <header className="sidebar-header">
-        <Link href="/dashboard" className="logo-link" title="TradeXEssence">
+        <Link href="/dashboard" className="logo-link" title="TradeXEssence" aria-label="TradeXEssence dashboard">
           <BrandMonogram />
           <BrandWordmark />
         </Link>

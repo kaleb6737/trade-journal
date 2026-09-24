@@ -25,9 +25,9 @@ export default function StreakHeatmap({ activityData }) {
 
   const getHeatmapColor = (count) => {
     if (count === 0) return 'var(--bg-surface)'
-    if (count <= 2) return 'rgba(212, 175, 55, 0.4)' // Faint gold
-    if (count <= 5) return 'rgba(212, 175, 55, 0.65)'
-    if (count <= 10) return 'rgba(212, 175, 55, 0.85)'
+    if (count <= 2) return 'rgba(232, 198, 106, 0.4)' // Faint gold
+    if (count <= 5) return 'rgba(232, 198, 106, 0.65)'
+    if (count <= 10) return 'rgba(232, 198, 106, 0.85)'
     return 'var(--gold-primary)' // > 10 trades
   }
 

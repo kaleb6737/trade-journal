@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none">
+  <defs>
+    <linearGradient id="surface" x1="4" y1="2" x2="43" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#29251B"/>
+      <stop offset=".55" stop-color="#131310"/>
+      <stop offset="1" stop-color="#090A09"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="4" y1="0" x2="45" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E9CE83"/>
+      <stop offset=".48" stop-color="#806A36"/>
+      <stop offset="1" stop-color="#3C3422"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="10" y1="12" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF0BB"/>
+      <stop offset=".5" stop-color="#E8C66A"/>
+      <stop offset="1" stop-color="#BB8F35"/>
+    </linearGradient>
+  </defs>
+  <rect x=".75" y=".75" width="46.5" height="46.5" rx="13" fill="url(#surface)" stroke="url(#edge)" stroke-width="1.5"/>
+  <rect x="3.5" y="3.5" width="41" height="41" rx="10.5" stroke="#FFF0BB" stroke-opacity=".055"/>
+  <path d="M10 12H30L26.5 17H20V35H15V17H10V12Z" fill="url(#gold)"/>
+  <path d="M22 22H28L37 35H31L22 22Z" fill="#BA913E"/>
+  <path d="M32 18H38L27 35H21L32 18Z" fill="url(#gold)"/>
+</svg>
