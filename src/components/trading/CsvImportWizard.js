@@ -7,7 +7,10 @@ import { CSV_MAX_BYTES, prepareCsv, readCsv } from '@/lib/csvImport'
 const initialOptions = { assetType: 'FUTURES', dateOrder: 'YMD', utcOffset: '', pnlMode: '', decimal: 'dot', costMode: 'cost' }
 const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }
 
+const STEP_LABEL = { 1: 'Choose platform', 2: 'Upload & map columns', 3: 'Review & import' }
+
 export default function CsvImportWizard({ onClose, onImport, onEmotionRate, renderTradovate }) {
+  const [step, setStep] = useState(1)
   const [profileId, setProfileId] = useState('')
   const [legacy, setLegacy] = useState(false)
   const [accounts, setAccounts] = useState([])
@@ -106,11 +109,21 @@ export default function CsvImportWizard({ onClose, onImport, onEmotionRate, rend
 
   if (legacy) return renderTradovate(() => setLegacy(false))
   const changeMapping = (field, value) => { setMapping(m => ({ ...m, [field]: value })); setConfirmed(false) }
+  const canReview = !!accountId && !!preview?.trades && !preview?.error
+  const goToStep = (n) => { setError(''); setStep(n) }
+
   return <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget && !busy && !reading) onClose() }}>
     <div className="modal" role="dialog" aria-modal="true" aria-labelledby="csv-title" ref={dialog} tabIndex={-1} onKeyDown={keyDown}
-      style={{ width: 'min(900px, 95vw)', maxWidth: 900, maxHeight: '90vh', overflowY: 'auto' }}>
-      <div className="modal-header"><h2 id="csv-title" className="modal-title">Import your trades</h2>
-        <button className="btn btn-ghost" aria-label="Close import" disabled={busy || reading} onClick={onClose}>✕</button></div>
+      style={{ width: 'min(900px, 95vw)', maxWidth: 900, maxHeight: '90vh', padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="modal-header" style={{ padding: '28px 32px 0', marginBottom: 0, flexShrink: 0 }}>
+        <div>
+          <h2 id="csv-title" className="modal-title">Import your trades</h2>
+          {!result && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>Step {step} of 3 · {STEP_LABEL[step]}</div>}
+        </div>
+        <button className="btn btn-ghost" aria-label="Close import" disabled={busy || reading} onClick={onClose}>✕</button>
+      </div>
+
+      <div style={{ padding: '20px 32px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
       {result ? <div aria-live="polite">
         <h3>Import complete</h3><p>{result.created} trades added · {result.skipped} already imported</p>
         <p>Saved to {account?.name}. Keep your source report for reconciliation.</p>
@@ -118,21 +131,21 @@ export default function CsvImportWizard({ onClose, onImport, onEmotionRate, rend
           {!!result.ids?.length && <button className="btn btn-primary" onClick={() => { onClose(); onEmotionRate(result.ids) }}>Rate your emotions</button>}
           <button className="btn btn-secondary" onClick={onClose}>Done</button>
         </div>
-      </div> : <>
+      </div> : step === 1 ? <>
         <p style={{ color: 'var(--text-secondary)' }}>Where did you place these trades? Choose the trading platform, even if the account belongs to a prop firm.</p>
-        <fieldset disabled={busy || reading} style={{ border: 0, padding: 0, minWidth: 0 }}>
-          <label className="form-label" htmlFor="csv-platform">Broker / trading platform</label>
-          <select id="csv-platform" className="form-input" value={profileId} onChange={e => choose(e.target.value)}>
-            <option value="">Choose a platform…</option>
-            {['Futures', 'Multi-asset', 'Forex platforms', 'Other'].map(group => <optgroup key={group} label={group}>
-              {CSV_PROFILES.filter(p => p.group === group).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </optgroup>)}
-          </select>
-          {profile?.legacy ? <div style={{ marginTop: 20 }}><p>Your existing Tradovate importer is unchanged.</p>
-            <button className="btn btn-primary" onClick={() => setLegacy(true)}>Continue with Tradovate</button></div> : profile ? <>
-            <section style={{ background: 'var(--bg-surface)', padding: 16, borderRadius: 12, margin: '18px 0' }}>
+        <label className="form-label" htmlFor="csv-platform">Broker / trading platform</label>
+        <select id="csv-platform" className="form-input" value={profileId} onChange={e => choose(e.target.value)}>
+          <option value="">Choose a platform…</option>
+          {['Futures', 'Multi-asset', 'Forex platforms', 'Other'].map(group => <optgroup key={group} label={group}>
+            {CSV_PROFILES.filter(p => p.group === group).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </optgroup>)}
+        </select>
+        {profile?.legacy && <div style={{ marginTop: 20 }}><p>Your existing Tradovate importer is unchanged.</p>
+          <button className="btn btn-primary" onClick={() => setLegacy(true)}>Continue with Tradovate</button></div>}
+      </> : step === 2 ? <fieldset disabled={busy || reading} style={{ border: 0, padding: 0, minWidth: 0 }}>
+            <section style={{ background: 'var(--bg-surface)', padding: 16, borderRadius: 12, margin: '0 0 18px' }}>
               <h3>{profile.name}: export guide</h3><p>{profile.description}</p>
-              <ol>{profile.steps.map(step => <li key={step} style={{ margin: '8px 0' }}>{step}</li>)}</ol>
+              <ol>{profile.steps.map(s => <li key={s} style={{ margin: '8px 0' }}>{s}</li>)}</ol>
               {profile.source && <a href={profile.source} target="_blank" rel="noopener noreferrer">Official platform guide ↗</a>}
               <p style={{ fontSize: 13 }}>Guided import: suggested columns must be reviewed. Native report versions have not all been verified with real exports. Only completed trades are accepted; no automatic fill pairing.</p>
               <button className="btn btn-secondary" type="button" onClick={download}>Download blank CSV template</button>
@@ -151,6 +164,8 @@ export default function CsvImportWizard({ onClose, onImport, onEmotionRate, rend
             </div>
             {!accounts.length && !accountError && <p>Create a trading account on the <a href="/accounts">Accounts page</a> if you do not have one yet.</p>}
             <p style={{ fontSize: 13 }}>Upload one account and one asset type at a time. P&L must be in the destination account currency; no currency conversion is performed. Do not include account passwords.</p>
+            {reading && <p role="status">Reading CSV…</p>}
+            {((error && !preview?.trades) || preview?.error) && <p role="alert" style={{ color: 'var(--red)', marginTop: 16 }}>{error || preview.error}</p>}
             {headers.length > 0 && <>
               <h3>Match columns · {filename}</h3>
               <p>Check every suggestion. Required fields are marked *. Each row must contain both sides of a completed trade.</p>
@@ -170,22 +185,31 @@ export default function CsvImportWizard({ onClose, onImport, onEmotionRate, rend
               </div>
               <p style={{ fontSize: 13 }}>Offsets embedded in timestamps take precedence. For timestamps without offsets, split exports at daylight-saving changes. Swap is always signed: negative charge, positive credit. Missing optional costs are treated as zero.</p>
             </>}
-          </> : null}
-        </fieldset>
-        {reading && <p role="status">Reading CSV…</p>}
-        {(error || preview?.error) && <p role="alert" style={{ color: 'var(--red)', marginTop: 16 }}>{error || preview.error}</p>}
-        {preview?.trades && <section style={{ marginTop: 20 }} aria-live="polite">
+        </fieldset> : <>
+        {preview?.trades && <section aria-live="polite">
           <h3>Review before saving</h3>
           <p>{preview.totalRows} rows · {preview.trades.length} valid · {preview.errors.length} need correction</p>
           <p>Valid-row net P&L: {preview.netPnl.toFixed(2)} {account?.currency || '(choose account)'}</p>
-          {!!preview.errors.length && <div role="alert"><p>No rows will be saved until all errors are corrected.</p><ul>{preview.errors.slice(0, 10).map(e => <li key={e.row}>Row {e.row}: {e.message}</li>)}</ul>{preview.errors.length > 10 && <p>Showing the first 10 errors.</p>}</div>}
+          {!!preview.errors.length && <div role="alert"><p>No rows will be saved until all errors are corrected. Go back to fix the column mapping or options.</p><ul>{preview.errors.slice(0, 10).map(e => <li key={e.row}>Row {e.row}: {e.message}</li>)}</ul>{preview.errors.length > 10 && <p>Showing the first 10 errors.</p>}</div>}
           <div style={{ overflowX: 'auto' }}><table className="table" style={{ width: '100%', textAlign: 'left' }}><thead><tr>{['Symbol','Side','Entry (UTC)','Exit (UTC)','Quantity','Net P&L'].map(h => <th key={h}>{h}</th>)}</tr></thead>
             <tbody>{preview.trades.slice(0, 5).map(t => <tr key={t.sourceRow}><td>{t.symbol}</td><td>{t.side}</td><td>{t.entryDate}</td><td>{t.exitDate}</td><td>{t.quantity}</td><td>{t.manualPnl.toFixed(2)}</td></tr>)}</tbody></table></div>
           <p style={{ fontSize: 13 }}>First five valid rows shown. Re-uploading the same file to the same account/platform skips previously imported rows. Overlapping exports or broker-sync trades are not automatically deduplicated.</p>
-          <label style={{ display: 'flex', gap: 10, margin: '16px 0' }}><input type="checkbox" disabled={busy} checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />I checked the complete row count, net total, currency, dates, source quantity units and cost settings against my report.</label>
-          <button className="btn btn-primary" disabled={busy || !confirmed || !accountId || !preview.trades.length || !!preview.errors.length} onClick={submit}>{busy ? 'Saving…' : `Import ${preview.trades.length} trades`}</button>
         </section>}
       </>}
+      </div>
+
+      {!result && !(step === 1 && profile?.legacy) && (
+        <div style={{ flexShrink: 0, padding: '16px 32px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
+          {step === 3 && error && <p role="alert" style={{ color: 'var(--red)', marginBottom: 12 }}>{error}</p>}
+          {step === 3 && <label style={{ display: 'flex', gap: 10, marginBottom: 14 }}><input type="checkbox" disabled={busy} checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />I checked the complete row count, net total, currency, dates, source quantity units and cost settings against my report.</label>}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+            {step > 1 ? <button className="btn btn-secondary" disabled={busy} onClick={() => goToStep(step - 1)}>← Back</button> : <span />}
+            {step === 1 && <button className="btn btn-primary" disabled={!profileId || profile?.legacy} onClick={() => goToStep(2)}>Continue →</button>}
+            {step === 2 && <button className="btn btn-primary" disabled={!canReview} onClick={() => goToStep(3)}>Continue to review →</button>}
+            {step === 3 && <button className="btn btn-primary" disabled={busy || !confirmed || !accountId || !preview?.trades?.length || !!preview?.errors?.length} onClick={submit}>{busy ? 'Saving…' : `Import ${preview?.trades?.length || 0} trades`}</button>}
+          </div>
+        </div>
+      )}
     </div>
   </div>
 }

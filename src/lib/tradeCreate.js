@@ -1,4 +1,5 @@
 import { deriveOccurredAt } from '@/lib/money'
+import { normalizeR } from '@/lib/rMultiple'
 
 /**
  * Build Prisma `data` for trade.create from API / CSV / bulk bodies.
@@ -13,7 +14,7 @@ export function buildTradeCreateData(userId, body) {
     quantity, commission, fees,
     stopLoss, takeProfit,
     tags, notes, mistakes, playbookId, accountId, externalRef,
-    tradeSession, manualPnl,
+    tradeSession, manualPnl, rMultiple,
   } = body
 
   if (!symbol || !side || !entryDate || entryPrice == null || quantity == null) {
@@ -69,6 +70,7 @@ export function buildTradeCreateData(userId, body) {
     grossPnl,
     netPnl,
     returnPercent,
+    rMultiple: normalizeR(rMultiple, netPnl),
     tags: JSON.stringify(tags || []),
     notes: notes || null,
     mistakes: JSON.stringify(mistakes || []),

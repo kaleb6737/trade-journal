@@ -43,3 +43,13 @@ yarn-error.log*
 
 # TypeScript
 *.tsbuildinfo
+.env.*
+!.env.example
+!.env.local.example
+api_keys.json
+.claude/
+.claude-flow/
+node_modules/
+.next/
+.venv/
+__pycache__/

@@ -16,8 +16,23 @@ export async function GET(req) {
   const symbol    = searchParams.get('symbol')
   const accountId = searchParams.get('accountId')
   const date      = searchParams.get('date')
+  const from      = searchParams.get('from')
+  const to        = searchParams.get('to')
   const limit     = parseInt(searchParams.get('limit') || '1000')
   const offset    = parseInt(searchParams.get('offset') || '0')
+
+  // Lightweight rows for grouping trades into weeks on the client (in the user's timezone).
+  if (searchParams.get('summary') === '1') {
+    const [rows, user] = await Promise.all([
+      prisma.trade.findMany({
+        where: { userId: session.user.id },
+        select: { entryDate: true, netPnl: true, hidden: true },
+        orderBy: { entryDate: 'desc' },
+      }),
+      prisma.user.findUnique({ where: { id: session.user.id }, select: { weekStarts: true } }),
+    ])
+    return NextResponse.json({ rows, weekStarts: user?.weekStarts || [] })
+  }
 
   const where = { userId: session.user.id }
   if (status)    where.status    = status
@@ -31,12 +46,17 @@ export async function GET(req) {
     const endDate = new Date(date)
     endDate.setUTCHours(23, 59, 59, 999)
     where.entryDate = { gte: startDate, lte: endDate }
+  } else if (from || to) {
+    const range = {}
+    if (from && !Number.isNaN(Date.parse(from))) range.gte = new Date(from)
+    if (to && !Number.isNaN(Date.parse(to))) range.lt = new Date(to)
+    if (Object.keys(range).length) where.entryDate = range
   }
 
   const [trades, total] = await Promise.all([
     prisma.trade.findMany({
       where,
-      orderBy: { entryDate: 'desc' },
+      orderBy: [{ entryDate: 'desc' }, { id: 'desc' }],
       take: limit,
       skip: offset,
     }),

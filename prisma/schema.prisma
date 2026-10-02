@@ -17,13 +17,13 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  password      String?
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  name      String?
+  email     String   @unique
+  password  String?
+  image     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   /// Weekly email roundup preferences
   weeklyRoundupEnabled    Boolean   @default(false)
@@ -39,14 +39,19 @@ model User {
   /// Materialized plan for quick lookups (FREE | PRO | ULTIMATE). Source of truth is `subscription`.
   plan             String  @default("FREE")
 
-  accounts      TradingAccount[]
-  trades        Trade[]
-  playbooks     Playbook[]
-  tags          Tag[]
-  sessions      Session[]
-  weeklyRoundups WeeklyRoundupLog[]
-  subscription  Subscription?
+  /// Manual "start a new week" moments for the journal's week view. After each one,
+  /// weeks repeat every 7 days from it; before the first, weeks are Monday–Sunday.
+  weekStarts DateTime[] @default([])
+
+  accounts        TradingAccount[]
+  trades          Trade[]
+  playbooks       Playbook[]
+  tags            Tag[]
+  sessions        Session[]
+  weeklyRoundups  WeeklyRoundupLog[]
+  subscription    Subscription?
   deskWisdomLikes DeskWisdomLike[]
+  noTradeDays     NoTradeDay[]
 }
 
 /// User-saved favorites from the dashboard "Desk wisdom" quote deck (`quoteId` indexes `deskWisdomData`).
@@ -63,20 +68,20 @@ model DeskWisdomLike {
 
 /// One active subscription per user. Updated by Stripe webhooks.
 model Subscription {
-  id                    String    @id @default(cuid())
-  userId                String    @unique
-  stripeSubscriptionId  String    @unique
-  stripeCustomerId      String
-  stripePriceId         String
-  plan                  String    // PRO | ULTIMATE
-  interval              String    // month | year
-  status                String    // active | trialing | past_due | canceled | incomplete | ...
-  currentPeriodEnd      DateTime?
-  cancelAtPeriodEnd     Boolean   @default(false)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  stripeSubscriptionId String    @unique
+  stripeCustomerId     String
+  stripePriceId        String
+  plan                 String // PRO | ULTIMATE
+  interval             String // month | year
+  status               String // active | trialing | past_due | canceled | incomplete | ...
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([stripeCustomerId])
 }
@@ -95,93 +100,114 @@ model TradingAccount {
   name           String
   broker         String   @default("Manual")
   currency       String   @default("USD")
-  initialBalance Decimal @default(0)
+  initialBalance Decimal  @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   /// Alpaca API key id (not secret)
-  alpacaKeyId          String?
+  alpacaKeyId     String?
   /// AES-GCM encrypted secret
-  alpacaSecretEnc      String?
-  alpacaPaper          Boolean  @default(true)
+  alpacaSecretEnc String?
+  alpacaPaper     Boolean @default(true)
 
   /// Tradovate login + API app credentials (cid/sec from API Access in Tradovate)
-  tradovateName         String?
-  tradovatePasswordEnc  String?
-  tradovateCid          Int?
-  tradovateSecEnc       String?
-  tradovateDemo         Boolean  @default(true)
-  tradovateDeviceId     String?
+  tradovateName        String?
+  tradovatePasswordEnc String?
+  tradovateCid         Int?
+  tradovateSecEnc      String?
+  tradovateDemo        Boolean @default(true)
+  tradovateDeviceId    String?
 
   /// OAuth (redirect login at trader.tradovate.com) — access token encrypted; renew before expiry
-  tradovateOAuthAccessEnc   String?
-  tradovateOAuthExpiresAt   DateTime?
+  tradovateOAuthAccessEnc String?
+  tradovateOAuthExpiresAt DateTime?
 
-  lastBrokerSyncAt     DateTime?
-  lastBrokerSyncError  String?
+  lastBrokerSyncAt    DateTime?
+  lastBrokerSyncError String?
 
   /// Background sync via /api/cron/broker-sync (CRON_SECRET). Alpaca & Tradovate only.
   brokerAutoSyncEnabled Boolean @default(true)
 
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trades         Trade[]
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trades Trade[]
 }
 
 model Trade {
-  id             String    @id @default(cuid())
-  userId         String
-  accountId      String?
-  playbookId     String?
+  id         String  @id @default(cuid())
+  userId     String
+  accountId  String?
+  playbookId String?
 
-  symbol         String
-  side           String    // LONG | SHORT
-  assetType      String    @default("STOCK") // STOCK | OPTIONS | FOREX | FUTURES | CRYPTO
-  status         String    @default("CLOSED") // OPEN | CLOSED
+  symbol    String
+  side      String // LONG | SHORT
+  assetType String @default("STOCK") // STOCK | OPTIONS | FOREX | FUTURES | CRYPTO
+  status    String @default("CLOSED") // OPEN | CLOSED
 
-  entryDate      DateTime
-  exitDate       DateTime?
+  entryDate  DateTime
+  exitDate   DateTime?
   /// Canonical "when this trade counts" for analytics (exit if set, else entry).
-  occurredAt     DateTime?
+  occurredAt DateTime?
 
-  entryPrice     Decimal
-  exitPrice      Decimal?
-  quantity       Decimal
-  commission     Decimal @default(0)
-  fees           Decimal @default(0)
+  entryPrice Decimal
+  exitPrice  Decimal?
+  quantity   Decimal
+  commission Decimal  @default(0)
+  fees       Decimal  @default(0)
 
-  stopLoss       Decimal?
-  takeProfit     Decimal?
+  stopLoss   Decimal?
+  takeProfit Decimal?
 
-  grossPnl       Decimal?
-  netPnl         Decimal?
-  returnPercent  Decimal?
+  grossPnl      Decimal?
+  netPnl        Decimal?
+  returnPercent Decimal?
+  /// Result in R (multiples of the planned risk): +2.5 = gained 2.5R, -1 = lost 1R.
+  rMultiple     Decimal?
 
-  tags           String    @default("[]") // JSON array of tag names
-  notes          String?
-  mistakes       String    @default("[]") // JSON array
-  screenshotUrl  String?
+  tags          String  @default("[]") // JSON array of tag names
+  notes         String?
+  mistakes      String  @default("[]") // JSON array
+  screenshotUrl String?
 
   /// Idempotent key for broker imports (e.g. alpaca:sha256...). Use null for manual trades.
-  externalRef    String?
+  externalRef String?
 
-  tradeSession   String?   // Asian, London, New York, etc.
+  tradeSession String? // Asian, London, New York, etc.
 
   /// Post-trade emotional check-in (1=out of control, 5=fully focused)
-  emotionScore   Int?
+  emotionScore Int?
   /// JSON array of emotion tags e.g. ["Fear","FOMO","Disciplined"]
-  emotionTags    String    @default("[]")
+  emotionTags  String @default("[]")
 
   /// When true, trade is omitted from journal list, analytics, and dashboard by default (soft-hide).
-  hidden         Boolean   @default(false)
+  hidden Boolean @default(false)
 
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account        TradingAccount?  @relation(fields: [accountId], references: [id])
-  playbook       Playbook?        @relation(fields: [playbookId], references: [id])
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account  TradingAccount? @relation(fields: [accountId], references: [id])
+  playbook Playbook?       @relation(fields: [playbookId], references: [id])
 
   @@unique([userId, externalRef])
+}
+
+/// A day the user deliberately took zero trades — its own record so it never
+/// has to masquerade as a Trade (no symbol/price/qty) and never leaks into
+/// P&L math, win-rate stats, CSV export, or broker sync.
+model NoTradeDay {
+  id        String   @id @default(cuid())
+  userId    String
+  /// Calendar day this note is for (time-of-day is ignored; one per user per day).
+  date      DateTime
+  reason    String?
+  tags      String   @default("[]") // JSON array, e.g. ["Discipline","No Setup"]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
 }
 
 model Playbook {
@@ -194,8 +220,8 @@ model Playbook {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trades      Trade[]
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trades Trade[]
 }
 
 model Tag {
@@ -205,7 +231,7 @@ model Tag {
   color     String   @default("#D4AF37")
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, name])
 }
@@ -220,14 +246,14 @@ model WeeklyRoundupLog {
   createdTrades    Int      @default(0)
   winners          Int      @default(0)
   losers           Int      @default(0)
-  netPnl           Decimal @default(0)
+  netPnl           Decimal  @default(0)
   summaryText      String
   reflectionPrompt String
   aiAnalysis       String?
   sentAt           DateTime @default(now())
   createdAt        DateTime @default(now())
 
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, sentAt])
 }

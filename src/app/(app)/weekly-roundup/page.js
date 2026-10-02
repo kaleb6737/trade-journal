@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import WeeklyCharts from '@/components/trading/WeeklyCharts'
+import DeepCoachReport from '@/components/trading/DeepCoachReport'
 
 const fadeUp  = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.3 } } }
 const stagger = { show: { transition: { staggerChildren: 0.06 } } }
@@ -177,6 +178,7 @@ export default function WeeklyRoundupPage() {
     setHistory(logs)
     setLog(prev => prev ?? (logs[0] || null))
     setLoading(false)
+    return logs
   }
   useEffect(() => { fetchHistory() }, [])
 
@@ -197,7 +199,10 @@ export default function WeeklyRoundupPage() {
     const r = await fetch('/api/weekly-roundup/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ previewOnly: false }) })
     const d = await r.json()
     if (!r.ok) { setError(d.error || 'Failed'); setGenerating(false); return }
-    await fetchHistory()
+    // fetchHistory() alone won't switch `log` once one is already selected (it only
+    // fills in an initial null) — force-select the just-generated (newest) entry.
+    const logs = await fetchHistory()
+    setLog(logs[0] || null)
     setGenerating(false)
   }
 
@@ -227,7 +232,7 @@ export default function WeeklyRoundupPage() {
           <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>AI coaching from your trades, notes & emotions this week</p>
         </div>
         <button onClick={generate} disabled={generating} className="btn btn-primary" style={{ gap: 8 }}>
-          {generating ? <><span className="spinner" style={{ width: 15, height: 15, borderWidth: 2 }} /> Generating…</> : <><Sparkles size={15} /> Generate Now</>}
+          {generating ? <><span className="spinner" style={{ width: 15, height: 15, borderWidth: 2 }} /> Deep-reviewing your week (~25s)…</> : <><Sparkles size={15} /> Generate Now</>}
         </button>
       </div>
 
@@ -245,7 +250,7 @@ export default function WeeklyRoundupPage() {
 
           {/* History strip */}
           {history.length > 1 && (
-            <motion.div variants={fadeUp} style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 16, paddingBottom: 4 }}>
+            <motion.div initial="hidden" animate="show" variants={fadeUp} style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 16, paddingBottom: 4 }}>
               {history.map(h => {
                 const p = parseFloat(h.netPnl) || 0
                 const wr = h.winners + h.losers > 0 ? Math.round((h.winners / (h.winners + h.losers)) * 100) : 0
@@ -309,7 +314,9 @@ export default function WeeklyRoundupPage() {
             <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
 
               {activeTab === 'overview' && (
-                <motion.div variants={stagger} style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                // Own initial/animate: cards inheriting the page-level variants stay at
+                // opacity 0 when this tab remounts after the page already animated in.
+                <motion.div initial="hidden" animate="show" variants={stagger} style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <StatCard label="Net P&L"  value={formatCurrency(log.netPnl)} color={pnlColor} icon={pnlNum >= 0 ? TrendingUp : TrendingDown} />
                   <StatCard label="Trades"   value={log.createdTrades}           icon={BarChart2} />
                   <StatCard label="Wins"     value={log.winners}  color="#22c55e" icon={Trophy} />
@@ -323,7 +330,9 @@ export default function WeeklyRoundupPage() {
               )}
 
               {activeTab === 'coaching' && (
-                ai ? (
+                ai?.gamePlan || ai?.summary ? (
+                  <DeepCoachReport ai={ai} generatedAt={log.sentAt} />
+                ) : ai ? (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '10px 16px', borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
                       <Brain size={15} style={{ color: 'var(--gold-primary)' }} />
@@ -340,7 +349,7 @@ export default function WeeklyRoundupPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="card" style={{ textAlign: 'center', padding: '40px 24px' }}><p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0 }}>No AI analysis. Set <code>GROQ_API_KEY</code> in <code>.env.local</code> and regenerate.</p></div>
+                  <div className="card" style={{ textAlign: 'center', padding: '40px 24px' }}><p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0 }}>No AI analysis for this round-up — the AI request didn&apos;t succeed when it was generated. Hit <strong>Regenerate</strong> to try again (if it keeps failing, check <code>GROQ_API_KEY</code> and the server log).</p></div>
                 )
               )}
 

@@ -4,12 +4,32 @@ import { decryptBrokerSecret, encryptBrokerSecret } from '@/lib/brokerCrypto'
 import { tradovateV1Base } from '@/lib/tradovateConstants'
 import { renewTradovateAccessToken } from '@/lib/tradovateOAuth'
 
-const APP_ID = 'TradeXEssence'
-const APP_VERSION = '1.0'
+// Tradovate API keys are issued for a specific appId/appVersion; login fails if these
+// don't match the key. Set them from the key Tradovate gives you.
+const appId = () => process.env.TRADOVATE_APP_ID?.trim() || 'TradeXEssence'
+const appVersion = () => process.env.TRADOVATE_APP_VERSION?.trim() || '1.0'
 
 export function tradovateBaseUrl(demo) {
   return tradovateV1Base(demo)
 }
+
+/**
+ * The app's own Tradovate API credentials (like TradeZella's). With these set,
+ * traders connect with just their Tradovate username + password.
+ */
+export function tradovateAppCredentials() {
+  const cid = parseInt(process.env.TRADOVATE_APP_CID || '', 10)
+  const sec = process.env.TRADOVATE_APP_SEC?.trim()
+  return Number.isFinite(cid) && sec ? { cid, sec } : null
+}
+
+/** Username/password login is possible: saved password + (own API keys or the app's). */
+export function hasTradovatePasswordLogin(account) {
+  if (!account?.tradovateName || !account?.tradovatePasswordEnc) return false
+  return (account.tradovateCid != null && !!account.tradovateSecEnc) || !!tradovateAppCredentials()
+}
+
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)) }
 
 /**
  * @param {string} baseUrl - v1 API root (no trailing slash)
@@ -20,11 +40,12 @@ export async function requestTradovateAccessToken(baseUrl, creds) {
   const body = {
     name: creds.name,
     password: creds.password,
-    appId: APP_ID,
-    appVersion: APP_VERSION,
+    appId: appId(),
+    appVersion: appVersion(),
     deviceId: creds.deviceId,
     cid: creds.cid,
     sec: creds.sec,
+    ...(creds['p-ticket'] ? { 'p-ticket': creds['p-ticket'] } : {}),
   }
 
   const res = await fetch(`${base}/auth/accesstokenrequest`, {
@@ -41,6 +62,19 @@ export async function requestTradovateAccessToken(baseUrl, creds) {
   if (!res.ok) {
     const msg = json.errorText || json.message || `HTTP ${res.status}`
     throw new Error(typeof msg === 'string' ? msg.slice(0, 400) : 'Tradovate auth failed')
+  }
+  // Tradovate throttles repeated logins with a "penalty ticket": wait p-time seconds
+  // and retry with the ticket, or (with p-captcha) require a browser login first.
+  if (json['p-ticket']) {
+    if (json['p-captcha']) {
+      throw new Error('Tradovate wants a security check. Log in once at trader.tradovate.com in your browser, then try connecting again.')
+    }
+    const wait = Number(json['p-time']) || 0
+    if ((creds._attempt || 0) >= 2 || wait > 20) {
+      throw new Error(`Tradovate is limiting login attempts. Try again in ${Math.max(wait, 30)} seconds.`)
+    }
+    await sleep(wait * 1000)
+    return requestTradovateAccessToken(baseUrl, { ...creds, 'p-ticket': json['p-ticket'], _attempt: (creds._attempt || 0) + 1 })
   }
   if (json.errorText && String(json.errorText).trim()) {
     throw new Error(String(json.errorText).slice(0, 400))
@@ -211,6 +245,8 @@ export function randomDeviceId() {
  * Valid OAuth access token, renewing shortly before expiry when needed.
  * @param {import('@prisma/client').TradingAccount} account
  */
+export const TRADOVATE_SIGNIN_EXPIRED = 'Tradovate sign-in expired — sign in with Tradovate again on the Accounts page to reconnect and sync.'
+
 export async function ensureTradovateOAuthAccessToken(account) {
   if (!account.tradovateOAuthAccessEnc) return null
   let token = decryptBrokerSecret(account.tradovateOAuthAccessEnc)
@@ -218,11 +254,25 @@ export async function ensureTradovateOAuthAccessToken(account) {
 
   const expiresAt = account.tradovateOAuthExpiresAt
   const demo = account.tradovateDemo !== false
-  const needsRenew =
-    !!expiresAt && new Date(expiresAt).getTime() - Date.now() < 90_000
+  const msLeft = expiresAt ? new Date(expiresAt).getTime() - Date.now() : Infinity
+  const hasApiKeyLogin = hasTradovatePasswordLogin(account)
 
-  if (needsRenew) {
-    const renewed = await renewTradovateAccessToken(demo, token)
+  // Tradovate can only renew a token that hasn't expired yet (~80 min life), so a
+  // once-a-day sync usually finds it expired. Fall back to API-key login if the
+  // account has one; otherwise the trader has to sign in again.
+  if (msLeft <= 0) {
+    if (hasApiKeyLogin) return null
+    throw new Error(TRADOVATE_SIGNIN_EXPIRED)
+  }
+
+  if (msLeft < 90_000) {
+    let renewed
+    try {
+      renewed = await renewTradovateAccessToken(demo, token)
+    } catch {
+      if (hasApiKeyLogin) return null
+      throw new Error(TRADOVATE_SIGNIN_EXPIRED)
+    }
     token = renewed.accessToken
     const ms = (renewed.expiresIn || 3600) * 1000
     const nextExp = new Date(Date.now() + ms)
@@ -248,19 +298,22 @@ export async function syncTradovateAccount(userId, account) {
   let newDeviceId = null
 
   if (!accessToken) {
-    if (!account.tradovateName || !account.tradovatePasswordEnc || account.tradovateCid == null || !account.tradovateSecEnc) {
+    if (!hasTradovatePasswordLogin(account)) {
       throw new Error('Tradovate is not connected for this account')
     }
 
+    const own = account.tradovateCid != null && account.tradovateSecEnc
+    const app = tradovateAppCredentials()
     const password = decryptBrokerSecret(account.tradovatePasswordEnc)
-    const sec = decryptBrokerSecret(account.tradovateSecEnc)
+    const sec = own ? decryptBrokerSecret(account.tradovateSecEnc) : app.sec
+    const cid = own ? account.tradovateCid : app.cid
     if (!password || !sec) throw new Error('Could not decrypt Tradovate credentials')
 
     newDeviceId = account.tradovateDeviceId || randomDeviceId()
     const tokenRes = await requestTradovateAccessToken(base, {
       name: account.tradovateName,
       password,
-      cid: account.tradovateCid,
+      cid,
       sec,
       deviceId: newDeviceId,
     })

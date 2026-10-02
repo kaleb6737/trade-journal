@@ -62,6 +62,7 @@ export default function DashboardPage() {
     equityCurve = [],
     dayOfWeek = [],
     calendar = {},
+    noTradeDays = {},
     activityData = null,
     recentTrades = [],
     symbolData = [],
@@ -217,7 +218,7 @@ export default function DashboardPage() {
         <StreakHeatmap activityData={activityData} />
 
         <div style={{ marginBottom: 24 }}>
-          <PnLCalendar calendar={calendar} statsTimeZone={statsTimeZone} />
+          <PnLCalendar calendar={calendar} noTradeDays={noTradeDays} statsTimeZone={statsTimeZone} />
         </div>
 
         <motion.div

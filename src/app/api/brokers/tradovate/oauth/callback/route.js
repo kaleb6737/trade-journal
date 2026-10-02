@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { encryptBrokerSecret } from '@/lib/brokerCrypto'
+import { runAutoSyncForAccount } from '@/lib/brokerAutoSync'
 import {
   exchangeTradovateOAuthCode,
   fetchTradovateOAuthProfile,
@@ -78,7 +79,7 @@ export async function GET(req) {
 
   const expiresAt = new Date(Date.now() + tokens.expiresIn * 1000)
 
-  await prisma.tradingAccount.update({
+  const linked = await prisma.tradingAccount.update({
     where: { id: acc.id },
     data: {
       broker: 'Tradovate',
@@ -95,5 +96,14 @@ export async function GET(req) {
     },
   })
 
-  return redirectAccounts(req, { tradovate: 'connected' })
+  // Sync right away: Tradovate sign-ins last ~80 minutes, so the daily job usually
+  // can't reuse this one — logging in is when fills reliably get imported.
+  try {
+    const r = await runAutoSyncForAccount(parsed.userId, linked)
+    return redirectAccounts(req, { tradovate: 'connected', created: String(r.created ?? 0), skipped: String(r.skipped ?? 0) })
+  } catch (e) {
+    const msg = (e.message || 'Sync failed').slice(0, 500)
+    await prisma.tradingAccount.update({ where: { id: acc.id }, data: { lastBrokerSyncError: msg } })
+    return redirectAccounts(req, { tradovate: 'connected', syncError: msg })
+  }
 }

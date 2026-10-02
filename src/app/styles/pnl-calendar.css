@@ -222,8 +222,16 @@
   border-color: rgba(239, 68, 68, 0.7) !important;
 }
 
+/* ── Hover: breakeven day (gold glow) — distinct from both a win/loss and an untouched day ── */
+.pnl-cal-cell--be:hover {
+  box-shadow:
+    0 10px 32px rgba(232, 198, 106, 0.3),
+    0 0 0 1px rgba(232, 198, 106, 0.55);
+  border-color: rgba(232, 198, 106, 0.6) !important;
+}
+
 /* ── Hover: neutral day ── */
-.pnl-cal-cell:not(.pnl-cal-cell--win):not(.pnl-cal-cell--loss):not(.pnl-cal-cell--empty):hover {
+.pnl-cal-cell:not(.pnl-cal-cell--win):not(.pnl-cal-cell--loss):not(.pnl-cal-cell--be):not(.pnl-cal-cell--empty):hover {
   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
   border-color: var(--border-default) !important;
 }
@@ -328,6 +336,21 @@
   font-size: 0.58rem;
   color: var(--text-muted);
   line-height: 1.1;
+}
+
+/* ── No-trade day: deliberately flat, distinct from an untouched empty cell ── */
+.pnl-cal-cell--notrade {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--border-default);
+}
+
+.pnl-cal-day-notrade {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: auto;
 }
 
 /* ── Week total ── */

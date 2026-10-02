@@ -296,7 +296,10 @@ export function buildCalendarData(trades, ianaTimeZone) {
   const map = {}
   const tz = ianaTimeZone || tradeStatsTimeZone()
   trades
-    .filter(t => t.status === 'CLOSED' && t.netPnl != null && tradeDate(t))
+    // A trade with a realized P&L (even $0 / breakeven) belongs on the calendar
+    // regardless of its OPEN/CLOSED housekeeping flag — that flag can lag behind
+    // manually-entered exit info.
+    .filter(t => t.netPnl != null && tradeDate(t))
     .forEach(t => {
       const key = toDateKeyInTimeZone(tradeDate(t), tz)
       if (!key) return
@@ -472,6 +475,17 @@ export function buildActivityData(trades) {
 }
 
 // Parse tags safely
+/** Strips a NotesEditor-serialized value (plain text or {v,html,images} JSON) down to plain text. */
+export function stripNotesToText(raw) {
+  if (!raw) return ''
+  let html = raw
+  try {
+    const p = JSON.parse(raw)
+    if (p && typeof p === 'object') html = p.html ?? p.text ?? ''
+  } catch {}
+  return String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
 export function parseTags(tagsJson) {
   try { return JSON.parse(tagsJson || '[]') }
   catch { return [] }
@@ -492,4 +506,8 @@ export const BROKERS = [
   'Manual', 'ThinkorSwim', 'Interactive Brokers', 'TradeStation',
   'Webull', 'Tastytrade', 'Charles Schwab', 'E*TRADE', 'Alpaca',
   'Robinhood', 'Tradovate', 'NinjaTrader', 'Other'
+]
+export const NO_TRADE_REASONS = [
+  'No Setup', 'Discipline', 'Overtraded Yesterday', 'Sick / Personal',
+  'Market Closed', 'Traveling', 'News / High Volatility', 'Waited, Then Missed It',
 ]

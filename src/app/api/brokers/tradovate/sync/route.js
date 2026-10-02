@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { syncTradovateAccount } from '@/lib/tradovateSync'
+import { syncTradovateAccount, hasTradovatePasswordLogin } from '@/lib/tradovateSync'
 import { PlanError, gateFeature, planErrorResponse } from '@/lib/gateApi'
 
 export async function POST(req) {
@@ -21,11 +21,7 @@ export async function POST(req) {
     })
     if (!acc) return NextResponse.json({ error: 'Account not found' }, { status: 404 })
     const hasOAuth = !!acc.tradovateOAuthAccessEnc
-    const hasLegacy =
-      !!acc.tradovateName &&
-      !!acc.tradovatePasswordEnc &&
-      acc.tradovateCid != null &&
-      !!acc.tradovateSecEnc
+    const hasLegacy = hasTradovatePasswordLogin(acc)
     if (!hasOAuth && !hasLegacy) {
       return NextResponse.json({ error: 'Connect Tradovate first' }, { status: 400 })
     }

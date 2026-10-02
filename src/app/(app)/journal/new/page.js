@@ -1,15 +1,102 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import NotesEditor from '@/components/NotesEditor'
-import { ASSET_TYPES, TRADE_SIDES, BROKERS, parseTags, tradeOutcome } from '@/lib/utils'
-import { ArrowLeft } from 'lucide-react'
+import { ASSET_TYPES, TRADE_SIDES, BROKERS, NO_TRADE_REASONS, parseTags, tradeOutcome } from '@/lib/utils'
+import { ArrowLeft, CalendarOff } from 'lucide-react'
 import { EmotionModal } from '@/components/trading/EmotionCheckIn'
+import RInput from '@/components/trading/RInput'
 
-export default function NewTradePage() {
+function NoTradeDayForm({ initialDate }) {
   const router = useRouter()
+  const [date, setDate] = useState(initialDate || new Date().toISOString().slice(0, 10))
+  const [reason, setReason] = useState('')
+  const [tags, setTags] = useState([])
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  // Editing an existing note (came from the journal list's edit link): preload it.
+  useEffect(() => {
+    if (!initialDate) return
+    fetch(`/api/no-trade-days?date=${initialDate}`)
+      .then(r => r.json())
+      .then(d => {
+        const existing = d.noTradeDays?.[0]
+        if (existing) {
+          setReason(existing.reason || '')
+          setTags(parseTags(existing.tags))
+        }
+      })
+      .catch(() => {})
+  }, [initialDate])
+
+  const toggleTag = (t) => setTags(p => (p.includes(t) ? p.filter(x => x !== t) : [...p, t]))
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/no-trade-days', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, reason, tags }),
+      })
+      if (!res.ok) { const d = await res.json(); setError(d.error || 'Failed to save'); setLoading(false); return }
+      const { noTradeDay } = await res.json()
+      router.push(noTradeDay?.id ? `/journal/no-trade/${noTradeDay.id}` : `/journal?date=${date}`)
+    } catch { setError('Something went wrong. Try again.'); setLoading(false) }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="card" style={{ maxWidth: 640, margin: '0 auto' }}>
+        <div className="section-title">No-Trade Day</div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: -8, marginBottom: 20 }}>
+          Sitting on your hands is a skill too. Log why you stayed flat so the pattern shows up later.
+        </p>
+
+        <div className="form-group">
+          <label className="form-label">Date *</label>
+          <input id="no-trade-date" type="date" className="form-input" value={date} onChange={e => setDate(e.target.value)} required />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Reason</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+            {NO_TRADE_REASONS.map(t => (
+              <span
+                key={t}
+                className={tags.includes(t) ? 'badge badge-gold' : 'tag'}
+                style={{ cursor: 'pointer' }}
+                onClick={() => toggleTag(t)}
+              >
+                {tags.includes(t) ? `${t} ✕` : `+ ${t}`}
+              </span>
+            ))}
+          </div>
+          <NotesEditor value={reason} onChange={e => setReason(e.target.value)} />
+        </div>
+
+        {error && <p className="form-error" style={{ textAlign: 'center', fontSize: 14 }}>{error}</p>}
+        <div className="flex gap-3" style={{ marginTop: 8 }}>
+          <Link href="/journal" className="btn btn-secondary" style={{ flex: 1, justifyContent: 'center' }}>Cancel</Link>
+          <button type="submit" disabled={loading} className="btn btn-primary" style={{ flex: 2, justifyContent: 'center', height: 44 }}>
+            {loading ? <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} /> : 'Save No-Trade Day'}
+          </button>
+        </div>
+      </div>
+    </form>
+  )
+}
+
+function NewTradePageInner() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const dateParam = searchParams.get('date')
+  const [mode, setMode] = useState(dateParam ? 'NO_TRADE' : 'TRADE')
   const [form, setForm] = useState({
     symbol: '', side: 'LONG', assetType: 'STOCK', status: 'CLOSED',
     entryDate: new Date().toISOString().slice(0, 16),
@@ -17,7 +104,7 @@ export default function NewTradePage() {
     entryPrice: '', exitPrice: '', quantity: '',
     commission: '0', fees: '0', stopLoss: '', takeProfit: '',
     notes: '', playbookId: '', accountId: '', tradeSession: '', tagInput: '', tags: [],
-    manualPnl: '',
+    manualPnl: '', rMultiple: '',
   })
   const [useManualPnl, setUseManualPnl] = useState(false)
   const [accounts, setAccounts] = useState([])
@@ -92,6 +179,7 @@ export default function NewTradePage() {
     e.preventDefault()
     setError('')
     if (!form.symbol || !form.entryPrice || !form.quantity) { setError('Symbol, entry price, and quantity are required.'); return }
+    if (form.status === 'CLOSED' && form.rMultiple.trim() === '') { setError('How much R did this trade gain or lose? Add it in the R field (e.g. 2 or -1).'); return }
     setLoading(true)
     try {
       const payload = {
@@ -108,6 +196,7 @@ export default function NewTradePage() {
       if (useManualPnl && form.manualPnl !== '') {
         payload.manualPnl = parseFloat(form.manualPnl)
       }
+      if (form.rMultiple.trim() !== '') payload.rMultiple = form.rMultiple
       const res = await fetch('/api/trades', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -131,11 +220,30 @@ export default function NewTradePage() {
         <div className="page-header flex items-center gap-3">
           <Link href="/journal" className="btn btn-ghost btn-icon"><ArrowLeft size={18} /></Link>
           <div>
-            <h1>Log New Trade</h1>
-            <p>Record a new trade in your journal</p>
+            <h1>{mode === 'TRADE' ? 'Log New Trade' : 'Log a No-Trade Day'}</h1>
+            <p>{mode === 'TRADE' ? 'Record a new trade in your journal' : "Journal why you didn't take a trade today"}</p>
           </div>
         </div>
 
+        <div className="tabs" style={{ marginBottom: 24 }}>
+          <button
+            type="button"
+            className={`tab${mode === 'TRADE' ? ' active gold' : ''}`}
+            onClick={() => setMode('TRADE')}
+          >
+            Log a Trade
+          </button>
+          <button
+            type="button"
+            className={`tab${mode === 'NO_TRADE' ? ' active gold' : ''}`}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            onClick={() => setMode('NO_TRADE')}
+          >
+            <CalendarOff size={14} /> No-Trade Day
+          </button>
+        </div>
+
+        {mode === 'NO_TRADE' ? <NoTradeDayForm initialDate={dateParam} /> : (
         <form onSubmit={handleSubmit}>
           <div className="grid-2" style={{ gap: 24 }}>
             {/* Left column */}
@@ -286,6 +394,14 @@ export default function NewTradePage() {
                     </div>
                     )
                   })()}
+
+                  <RInput
+                    value={form.rMultiple}
+                    onChange={(v) => setForm(p => ({ ...p, rMultiple: v }))}
+                    pnl={pnl}
+                    required={form.status === 'CLOSED'}
+                    suggestion={{ side: form.side, entryPrice: form.entryPrice, exitPrice: form.exitPrice, stopLoss: form.stopLoss }}
+                  />
                 </div>
               </div>
             </div>
@@ -385,7 +501,16 @@ export default function NewTradePage() {
             <NotesEditor value={form.notes} onChange={set('notes')} />
           </div>
         </form>
+        )}
       </div>
     </>
+  )
+}
+
+export default function NewTradePage() {
+  return (
+    <Suspense fallback={null}>
+      <NewTradePageInner />
+    </Suspense>
   )
 }

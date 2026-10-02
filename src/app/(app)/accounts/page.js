@@ -14,6 +14,7 @@ export default function AccountsPage() {
   const [syncingId, setSyncingId] = useState(null)
   const [toast, setToast] = useState(null)
   const [tradovateOAuthConfigured, setTradovateOAuthConfigured] = useState(false)
+  const [tradovateAppCreds, setTradovateAppCreds] = useState(false)
   const [accountsView, setAccountsView] = useState('gallery')
   const [pageLoading, setPageLoading] = useState(true)
 
@@ -35,7 +36,7 @@ export default function AccountsPage() {
   useEffect(() => {
     fetch('/api/brokers/tradovate/oauth/config')
       .then(r => r.json())
-      .then(d => setTradovateOAuthConfigured(!!d.configured))
+      .then(d => { setTradovateOAuthConfigured(!!d.configured); setTradovateAppCreds(!!d.appCredentials) })
       .catch(() => setTradovateOAuthConfigured(false))
   }, [])
   useEffect(() => {
@@ -43,7 +44,11 @@ export default function AccountsPage() {
     const p = new URLSearchParams(window.location.search)
     const tv = p.get('tradovate')
     if (tv === 'connected') {
-      showToast('Tradovate linked — you can sync fills anytime.')
+      const syncError = p.get('syncError')
+      const created = p.get('created')
+      if (syncError) showToast(`Tradovate linked, but the first sync failed: ${syncError}`, true)
+      else if (created != null) showToast(`Tradovate linked and synced — ${created} new trade${created === '1' ? '' : 's'} imported (${p.get('skipped') || 0} already in your journal).`)
+      else showToast('Tradovate linked — you can sync fills anytime.')
       window.history.replaceState({}, '', '/accounts')
       fetch_()
     } else if (tv === 'error') {
@@ -515,14 +520,16 @@ export default function AccountsPage() {
           <TradovateConnectModal
             account={tradovateModal}
             oauthConfigured={tradovateOAuthConfigured}
+            appCredentials={tradovateAppCreds}
             onClose={() => setTradovateModal(null)}
-            onSuccess={() => { setTradovateModal(null); fetch_(); showToast('Tradovate connected.') }}
+            onSuccess={(data) => {
+              setTradovateModal(null)
+              fetch_()
+              if (data?.syncError) showToast(`Tradovate connected, but the first sync failed: ${data.syncError}`, true)
+              else if (data?.sync) showToast(`Tradovate connected and synced — ${data.sync.created} new trade${data.sync.created === 1 ? '' : 's'} imported (${data.sync.skipped} already in your journal).`)
+              else showToast('Tradovate connected.')
+            }}
             onError={(m) => showToast(m, true)}
-            onHostedLoginBlocked={() =>
-              showToast(
-                'Paste TRADOVATE_OAUTH_CLIENT_ID and TRADOVATE_OAUTH_CLIENT_SECRET into .env.local from your Tradovate OAuth app. Redirect URI must be http://localhost:3000/api/brokers/tradovate/oauth/callback — then restart npm run dev.',
-                true
-              )}
           />
         )}
 
@@ -551,29 +558,26 @@ export default function AccountsPage() {
   )
 }
 
-function TradovateConnectModal({ account, oauthConfigured, onClose, onSuccess, onError, onHostedLoginBlocked }) {
+function TradovateConnectModal({ account, oauthConfigured, appCredentials, onClose, onSuccess, onError }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [cid, setCid] = useState('')
   const [sec, setSec] = useState('')
   const [demo, setDemo] = useState(account?.tradovateDemo !== false)
+  // Without app-level keys, the trader's own API keys are the only way in.
+  const [showOwnKeys, setShowOwnKeys] = useState(!appCredentials)
   const [loading, setLoading] = useState(false)
+  const needsOwnKeys = !appCredentials
 
   const startOAuth = () => {
-    if (!oauthConfigured) {
-      onHostedLoginBlocked?.()
-      return
-    }
-    const d = demo ? '1' : '0'
-    window.location.href = `/api/brokers/tradovate/oauth/start?accountId=${encodeURIComponent(account.id)}&demo=${d}`
+    window.location.href = `/api/brokers/tradovate/oauth/start?accountId=${encodeURIComponent(account.id)}&demo=${demo ? '1' : '0'}`
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!username.trim() || !password || cid === '' || !sec.trim()) {
-      onError('Enter username, password, cid, and sec')
-      return
-    }
+    const usingOwnKeys = showOwnKeys && (cid.trim() !== '' || sec.trim() !== '')
+    if (!username.trim() || !password) { onError('Enter your Tradovate username and password.'); return }
+    if (needsOwnKeys && (cid.trim() === '' || !sec.trim())) { onError('Enter your API cid and sec.'); return }
     setLoading(true)
     try {
       const res = await fetch('/api/brokers/tradovate/connect', {
@@ -583,14 +587,13 @@ function TradovateConnectModal({ account, oauthConfigured, onClose, onSuccess, o
           accountId: account.id,
           name: username.trim(),
           password,
-          cid: parseInt(String(cid).trim(), 10),
-          sec: sec.trim(),
+          ...(usingOwnKeys || needsOwnKeys ? { cid: parseInt(cid.trim(), 10), sec: sec.trim() } : {}),
           demo,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Connection failed')
-      onSuccess()
+      onSuccess(data)
     } catch (err) {
       onError(err.message)
     } finally {
@@ -600,36 +603,36 @@ function TradovateConnectModal({ account, oauthConfigured, onClose, onSuccess, o
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="modal" style={{ maxWidth: 480 }}>
+      <div className="modal" style={{ maxWidth: 460 }}>
         <div className="modal-header">
           <h2 className="modal-title">Connect Tradovate</h2>
           <button type="button" onClick={onClose} className="btn btn-ghost btn-icon">✕</button>
         </div>
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.6 }}>
-          Use <strong>Continue with Tradovate</strong> to sign in on Tradovate’s site (needs OAuth keys in server env), or fill in API cid/sec below.
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 18, lineHeight: 1.6 }}>
+          Sign in with your Tradovate login. Your executions sync into this journal automatically — once a day, and right away when you connect.
         </p>
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, cursor: 'pointer', marginBottom: 12 }}>
-            <input type="checkbox" checked={demo} onChange={e => setDemo(e.target.checked)} />
-            Simulation (demo) account
-          </label>
-          <button
-            type="button"
-            className={`btn ${oauthConfigured ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ width: '100%', justifyContent: 'center' }}
-            onClick={startOAuth}
-          >
-            <Link2 size={16} />
-            Continue with Tradovate
-          </button>
-          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, textAlign: 'center', lineHeight: 1.45 }}>
-            {oauthConfigured
-              ? 'Opens trader.tradovate.com — you approve access, then return here.'
-              : 'Not configured yet: set TRADOVATE_OAUTH_CLIENT_ID and SECRET in .env.local, restart dev — or use the form below.'}
-          </p>
-          <div style={{ margin: '18px 0', borderTop: '1px solid var(--border-subtle)' }} />
-          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 12 }}>Or API username + cid &amp; sec</p>
+
+        <div className="tv-env-toggle" role="radiogroup" aria-label="Account type">
+          {[['Live', false], ['Demo', true]].map(([label, value]) => (
+            <button key={label} type="button" role="radio" aria-checked={demo === value}
+              className={`tv-env-option${demo === value ? ' active' : ''}`} onClick={() => setDemo(value)}>
+              {label}
+            </button>
+          ))}
         </div>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '6px 0 16px' }}>
+          Pick the one your login is for. Prop-firm evaluation accounts are usually Demo.
+        </p>
+
+        {oauthConfigured && (
+          <>
+            <button type="button" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={startOAuth}>
+              <Link2 size={16} /> Continue with Tradovate
+            </button>
+            <div className="tv-or"><span>or sign in here</span></div>
+          </>
+        )}
+
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="form-group">
             <label className="form-label" htmlFor="tv-user">Tradovate username</label>
@@ -639,20 +642,38 @@ function TradovateConnectModal({ account, oauthConfigured, onClose, onSuccess, o
             <label className="form-label" htmlFor="tv-pass">Password</label>
             <input id="tv-pass" type="password" className="form-input" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
           </div>
-          <div className="grid-2" style={{ gap: 12 }}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="tv-cid">API cid (number)</label>
-              <input id="tv-cid" className="form-input" inputMode="numeric" value={cid} onChange={e => setCid(e.target.value)} placeholder="e.g. 8" />
+
+          {appCredentials && (
+            <button type="button" className="tv-advanced-toggle" onClick={() => setShowOwnKeys(v => !v)}>
+              {showOwnKeys ? '− Hide' : '+ Use'} my own Tradovate API keys (advanced)
+            </button>
+          )}
+          {showOwnKeys && (
+            <div className="grid-2" style={{ gap: 12 }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="tv-cid">API cid{needsOwnKeys ? ' *' : ''}</label>
+                <input id="tv-cid" className="form-input" inputMode="numeric" value={cid} onChange={e => setCid(e.target.value)} placeholder="e.g. 8" />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="tv-sec">API sec{needsOwnKeys ? ' *' : ''}</label>
+                <input id="tv-sec" type="password" className="form-input" value={sec} onChange={e => setSec(e.target.value)} autoComplete="new-password" />
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label" htmlFor="tv-sec">API sec (secret)</label>
-              <input id="tv-sec" type="password" className="form-input" value={sec} onChange={e => setSec(e.target.value)} autoComplete="new-password" />
-            </div>
-          </div>
-          <div className="flex gap-3" style={{ marginTop: 8 }}>
+          )}
+          {needsOwnKeys && (
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+              Your cid and sec come from Tradovate → Application Settings → API Access (requires Tradovate&apos;s API add-on).
+            </p>
+          )}
+
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+            Your password is encrypted and only used to fetch your executions. Disconnect anytime to delete it.
+          </p>
+
+          <div className="flex gap-3" style={{ marginTop: 4 }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={loading}>
-              {loading ? 'Verifying…' : 'Save & connect'}
+              {loading ? 'Connecting…' : 'Connect & sync'}
             </button>
           </div>
         </form>

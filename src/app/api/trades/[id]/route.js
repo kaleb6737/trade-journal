@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { deriveOccurredAt, toMoneyNumber } from '@/lib/money'
 import { ASSET_TYPES } from '@/lib/utils'
+import { normalizeR } from '@/lib/rMultiple'
 
 export async function GET(req, { params }) {
   const session = await getServerSession(authOptions)
@@ -38,6 +39,7 @@ export async function PATCH(req, { params }) {
       manualPnl,
       hidden,
       emotionScore, emotionTags,
+      rMultiple,
     } = body
 
     const onlyHidden =
@@ -45,7 +47,7 @@ export async function PATCH(req, { params }) {
       [
         symbol, side, assetType, status, entryDate, exitDate, entryPrice, exitPrice,
         quantity, commission, fees, stopLoss, takeProfit, tags, notes, mistakes,
-        playbookId, accountId, tradeSession, manualPnl,
+        playbookId, accountId, tradeSession, manualPnl, rMultiple,
       ].every((v) => v === undefined)
 
     if (onlyHidden) {
@@ -61,9 +63,15 @@ export async function PATCH(req, { params }) {
     const nextExit =
       exitDate !== undefined ? (exitDate ? new Date(exitDate) : null) : existing.exitDate
 
-    let grossPnl = null
-    let netPnl = null
-    let returnPercent = null
+    // Only recompute P&L when something that affects it was sent. Otherwise an
+    // unrelated update (e.g. the emotion check-in) would overwrite a manual P&L with
+    // a price-based one that doesn't know the contract's point value.
+    const pnlInputsChanged = [entryPrice, exitPrice, quantity, commission, fees, side, status, manualPnl]
+      .some((v) => v !== undefined)
+
+    let grossPnl = pnlInputsChanged ? null : undefined
+    let netPnl = pnlInputsChanged ? null : undefined
+    let returnPercent = pnlInputsChanged ? null : undefined
 
     const ep = entryPrice != null ? parseFloat(entryPrice) : (toMoneyNumber(existing.entryPrice) ?? 0)
     const qty = quantity != null ? parseFloat(quantity) : (toMoneyNumber(existing.quantity) ?? 0)
@@ -73,7 +81,9 @@ export async function PATCH(req, { params }) {
     // Determine the effective status
     const currentStatus = status || existing.status
 
-    if (manualPnl !== undefined && manualPnl !== null && manualPnl !== '') {
+    if (!pnlInputsChanged) {
+      // leave stored P&L untouched
+    } else if (manualPnl !== undefined && manualPnl !== null && manualPnl !== '') {
       // Explicit manual P&L override
       netPnl = parseFloat(manualPnl)
       grossPnl = netPnl + comm + fee
@@ -128,6 +138,7 @@ export async function PATCH(req, { params }) {
         ...(hidden !== undefined && { hidden: Boolean(hidden) }),
         ...(emotionScore !== undefined && { emotionScore: emotionScore === null ? null : Number(emotionScore) }),
         ...(emotionTags  !== undefined && { emotionTags: JSON.stringify(emotionTags) }),
+        ...(rMultiple !== undefined && { rMultiple: normalizeR(rMultiple, netPnl !== undefined ? netPnl : existing.netPnl) }),
       },
     })
 

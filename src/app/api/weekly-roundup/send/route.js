@@ -4,6 +4,9 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createAndSendWeeklyRoundup, smtpConfigured } from '@/lib/weeklyRoundup'
 
+// The deep AI review takes ~20-30s; Vercel's default function timeout is shorter.
+export const maxDuration = 60
+
 export async function POST(req) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

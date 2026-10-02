@@ -4,15 +4,28 @@ import { useState, useEffect, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
 import MarketPulse from '@/components/trading/MarketPulse'
-import { formatCurrency, formatDate, formatPercent, parseTags, ASSET_TYPES, toMoneyNumber, tradeOutcome } from '@/lib/utils'
-import { Plus, Search, Upload, Trash2, Edit, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { formatCurrency, formatDate, formatPercent, parseTags, ASSET_TYPES, toMoneyNumber, tradeOutcome, stripNotesToText } from '@/lib/utils'
+import { Plus, Search, Upload, Trash2, Edit, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, CalendarOff } from 'lucide-react'
 import { PRIVATE_TRADE_LABEL } from '@/lib/tradePrivacy'
 import Papa from 'papaparse'
 import dynamic from 'next/dynamic'
 import TradeDrawer from '@/components/trading/TradeDrawer'
+import { formatR, parseR } from '@/lib/rMultiple'
+import WeekNav, { ALL_WEEKS, buildWeeks, localDayKey, periodLabel, periodOf } from '@/components/trading/WeekNav'
 import { EmotionModal } from '@/components/trading/EmotionCheckIn'
+import { parseNotes } from '@/components/NotesEditor'
 
 const CsvImportWizard = dynamic(() => import('@/components/trading/CsvImportWizard'), { ssr: false })
+
+// NoTradeDay.date is stored as a plain UTC-midnight calendar day (no time-of-day
+// meaning) — format it from the raw "YYYY-MM-DD" prefix so it never shifts by a
+// day under the viewer's local timezone, unlike date-fns `format` (local time).
+const NTD_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function ntdDayKey(isoDate) { return isoDate.slice(0, 10) }
+function ntdDayLabel(isoDate) {
+  const [y, m, d] = ntdDayKey(isoDate).split('-').map(Number)
+  return `${NTD_MONTHS[m - 1]} ${d}, ${y}`
+}
 
 function JournalPageContent() {
   const searchParams = useSearchParams()
@@ -21,6 +34,7 @@ function JournalPageContent() {
   const [trades, setTrades] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [noTradeDays, setNoTradeDays] = useState([])
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({ 
     status: '', 
@@ -35,18 +49,61 @@ function JournalPageContent() {
   const [selectedTradeId, setSelectedTradeId] = useState(null)
   const [page, setPage] = useState(1)
   const limit = 50
+  // One week at a time. `focus` is any moment inside the selected week (or ALL_WEEKS);
+  // it starts at "now", so the journal opens on the current week and rolls over by itself.
+  const [focus, setFocus] = useState(() => {
+    const d = searchParams.get('date')
+    return d ? +new Date(`${d}T12:00:00`) : Date.now()
+  })
+  const [anchors, setAnchors] = useState(null)
+  const [summaryRows, setSummaryRows] = useState([])
+  const [weekBusy, setWeekBusy] = useState(false)
+  const [weeksCollapsed, setWeeksCollapsed] = useState(false)
+  useEffect(() => {
+    try { setWeeksCollapsed(localStorage.getItem('journal-weeks-collapsed') === '1') } catch {}
+  }, [])
+  const toggleWeeksCollapsed = () => setWeeksCollapsed((c) => {
+    try { localStorage.setItem('journal-weeks-collapsed', c ? '0' : '1') } catch {}
+    return !c
+  })
+  const period = anchors && focus !== ALL_WEEKS ? periodOf(focus, anchors) : null
+  const weeks = anchors ? buildWeeks(summaryRows, anchors) : []
+  const currentPeriod = anchors ? periodOf(Date.now(), anchors) : null
 
   useEffect(() => {
     fetch('/api/playbooks').then(r => r.json()).then(d => setPlaybooks(d.playbooks || []))
   }, [])
 
+  const applyAnchors = (list) => {
+    const next = (list || []).map(a => +new Date(a)).sort((a, b) => a - b)
+    // Keep the same array when nothing changed so dependent fetches don't re-run.
+    setAnchors(prev => (prev && prev.join() === next.join() ? prev : next))
+  }
+
+  const fetchWeeks = useCallback(async () => {
+    const res = await fetch('/api/trades?summary=1')
+    if (!res.ok) { setAnchors(prev => prev ?? []); return }
+    const { rows = [], weekStarts } = await res.json()
+    setSummaryRows(rows)
+    applyAnchors(weekStarts)
+  }, [])
+
+  useEffect(() => { fetchWeeks() }, [fetchWeeks])
+
+  const periodStart = period?.start
+  const periodEnd = period?.end
   const fetchTrades = useCallback(async () => {
+    if (!anchors) return
     setLoading(true)
     const params = new URLSearchParams()
     if (filters.status)    params.set('status', filters.status)
     if (filters.assetType) params.set('assetType', filters.assetType)
     if (filters.side)      params.set('side', filters.side)
     if (filters.date)      params.set('date', filters.date)
+    else if (periodStart != null) {
+      params.set('from', new Date(periodStart).toISOString())
+      params.set('to', new Date(periodEnd).toISOString())
+    }
     if (search)            params.set('symbol', search)
     params.set('limit', limit)
     params.set('offset', (page - 1) * limit)
@@ -55,15 +112,62 @@ function JournalPageContent() {
     setTrades(data.trades || [])
     setTotal(data.total || 0)
     setLoading(false)
-  }, [filters, search, page])
+  }, [filters, search, page, anchors, periodStart, periodEnd])
+
+  // Trade changes (delete, import, drawer edits) also refresh the week list.
+  const refreshTrades = useCallback(() => { fetchTrades(); fetchWeeks() }, [fetchTrades, fetchWeeks])
 
   useEffect(() => { fetchTrades() }, [fetchTrades])
+
+  const selectWeek = (start) => {
+    setFocus(start)
+    setPage(1)
+    if (filters.date) {
+      setFilters(p => ({ ...p, date: '' }))
+      router.replace('/journal')
+    }
+  }
+
+  const changeWeekStart = async (method) => {
+    if (method === 'POST' && !confirm('Start a new week right now? Trades from this moment on go into the new week, and weeks repeat every 7 days from now.')) return
+    setWeekBusy(true)
+    try {
+      const res = await fetch('/api/journal/week-start', { method })
+      if (!res.ok) {
+        alert(`Couldn't ${method === 'POST' ? 'start a new week' : 'undo the new week'}. Please try again.`)
+        return
+      }
+      applyAnchors((await res.json()).weekStarts)
+      selectWeek(Date.now())
+    } catch {
+      alert('Network error — please try again.')
+    } finally { setWeekBusy(false) }
+  }
+
+  const fetchNoTradeDays = useCallback(async () => {
+    if (!anchors && !filters.date) return
+    const params = new URLSearchParams()
+    if (filters.date) params.set('date', filters.date)
+    else if (periodStart != null) {
+      params.set('start', localDayKey(periodStart))
+      params.set('end', localDayKey(periodEnd - 1))
+    }
+    const res = await fetch(`/api/no-trade-days?${params}`)
+    const data = await res.json()
+    setNoTradeDays(data.noTradeDays || [])
+  }, [filters.date, anchors, periodStart, periodEnd])
+
+  useEffect(() => { fetchNoTradeDays() }, [fetchNoTradeDays])
 
   const deleteTrade = async (id) => {
     if (!confirm('Delete this trade?')) return
     await fetch(`/api/trades/${id}`, { method: 'DELETE' })
-    fetchTrades()
+    refreshTrades()
   }
+
+  // No-trade days describe a whole day, not a symbol/side/asset — hide them
+  // once the user is narrowing down to specific trade properties.
+  const showNoTradeDays = noTradeDays.length > 0 && !filters.status && !filters.side && !filters.assetType && !search
 
   const sorted = [...trades].sort((a, b) => {
     const dir = sort.dir === 'asc' ? 1 : -1
@@ -118,6 +222,37 @@ function JournalPageContent() {
 
         <MarketPulse />
 
+        <div className={`journal-week-layout${weeksCollapsed ? ' journal-week-layout--collapsed' : ''}`}>
+        <WeekNav
+          weeks={weeks}
+          selectedStart={focus === ALL_WEEKS ? ALL_WEEKS : period?.start}
+          onSelect={selectWeek}
+          totalTrades={summaryRows.length}
+          onStartWeek={() => changeWeekStart('POST')}
+          onUndoWeek={() => changeWeekStart('DELETE')}
+          canUndo={!!anchors?.length && currentPeriod?.start === anchors[anchors.length - 1]}
+          busy={weekBusy}
+          collapsed={weeksCollapsed}
+          onToggleCollapse={toggleWeeksCollapsed}
+        />
+        <div className="journal-week-main">
+
+        {weeks.length > 0 && !filters.date && (() => {
+          const w = period && weeks.find(x => x.start === period.start)
+          const isCurrent = period && currentPeriod && period.start === currentPeriod.start
+          return (
+            <div className="journal-week-header">
+              <h2>{!period ? 'All trades' : isCurrent ? 'This week' : `Week of ${periodLabel(period)}`}</h2>
+              <span>
+                {!period ? `${summaryRows.length} trades` : `${periodLabel(period)} · ${w?.trades ?? 0} trade${w?.trades === 1 ? '' : 's'}`}
+                {period && w?.trades > 0 && (
+                  <span className={w.net > 0 ? 'pnl-positive' : w.net < 0 ? 'pnl-negative' : 'pnl-flat'}> · {formatCurrency(w.net)}</span>
+                )}
+              </span>
+            </div>
+          )
+        })()}
+
         {/* Filters */}
         <div className="filter-bar">
           <div className="topbar-search">
@@ -159,6 +294,36 @@ function JournalPageContent() {
           )}
         </div>
 
+        {/* No-Trade Days */}
+        {showNoTradeDays && (
+          <div className="no-trade-day-list">
+            {noTradeDays.map(ntd => {
+              const tags = parseTags(ntd.tags)
+              const images = parseNotes(ntd.reason).images.length
+              const preview = stripNotesToText(ntd.reason)
+              return (
+                <Link key={ntd.id} href={`/journal/no-trade/${ntd.id}`} className="no-trade-day-row no-trade-day-link" title="Open this no-trade day journal">
+                  <CalendarOff size={16} className="no-trade-day-icon" aria-hidden />
+                  <div className="no-trade-day-body">
+                    <div className="no-trade-day-head">
+                      <span className="no-trade-day-date">{ntdDayLabel(ntd.date)}</span>
+                      <span className="badge badge-gray">No Trade Day</span>
+                      {tags.map(t => <span key={t} className="tag">{t}</span>)}
+                    </div>
+                    {(preview || images > 0) && (
+                      <div className="no-trade-day-preview">
+                        {preview || 'Journal entry'}
+                        {images > 0 && ` · ${images} image${images === 1 ? '' : 's'}`}
+                      </div>
+                    )}
+                  </div>
+                  <ChevronRight size={16} className="no-trade-day-chevron" aria-hidden />
+                </Link>
+              )
+            })}
+          </div>
+        )}
+
         {/* Table */}
         {loading ? (
           <div className="table-wrapper tx-table-shell" style={{ display: 'flex', minHeight: 400, alignItems: 'center', justifyContent: 'center' }}>
@@ -167,13 +332,21 @@ function JournalPageContent() {
         ) : sorted.length === 0 ? (
           <div className="empty-state-pro" style={{ marginTop: 32 }}>
             <div className="empty-icon-wrap"><Plus size={28} strokeWidth={2} /></div>
-            <h3>{search || filters.status || filters.side || filters.assetType ? 'No matches' : 'Empty ledger'}</h3>
-            <p>
-              {search || filters.status || filters.side || filters.assetType
-                ? 'Try widening filters or clearing search to see more trades.'
-                : 'Record your first execution or import a broker CSV to populate this grid.'}
-            </p>
-            <Link href="/journal/new" className="btn btn-primary btn-sm btn-glow">Log your first trade</Link>
+            {(() => {
+              const filtered = search || filters.status || filters.side || filters.assetType
+              const emptyWeek = !filtered && summaryRows.length > 0 && !!period
+              return <>
+                <h3>{filtered ? 'No matches' : emptyWeek ? (currentPeriod && period.start === currentPeriod.start ? 'No trades this week yet' : 'No trades this week') : 'Empty ledger'}</h3>
+                <p>
+                  {filtered
+                    ? `Try widening filters${period ? ', picking another week, or "All trades"' : ''} to see more.`
+                    : emptyWeek
+                      ? 'Pick another week from the list, or log a trade or no-trade day for this one.'
+                      : 'Record your first execution or import a broker CSV to populate this grid.'}
+                </p>
+                <Link href="/journal/new" className="btn btn-primary btn-sm btn-glow">{emptyWeek ? 'Log a trade' : 'Log your first trade'}</Link>
+              </>
+            })()}
           </div>
         ) : (
           <div className="table-wrapper tx-table-shell journal-table-wrap" style={{ maxHeight: '800px', overflowY: 'auto' }}>
@@ -207,6 +380,7 @@ function JournalPageContent() {
                       Net P&amp;L <SortIcon field="netPnl" />
                     </button>
                   </th>
+                  <th scope="col" title="R gained or lost">R</th>
                   <th className="journal-col-narrow-lg" scope="col">Return</th>
                   <th scope="col">Result</th>
                   <th className="journal-col-narrow-lg" scope="col">Tags</th>
@@ -289,6 +463,13 @@ function JournalPageContent() {
                         ) : (
                           '—'
                         )}
+                      </td>
+                      <td>
+                        {priv ? <span className="journal-td-muted">—</span> : trade.rMultiple != null ? (
+                          <span className={parseR(trade.rMultiple) > 0 ? 'pnl-positive' : parseR(trade.rMultiple) < 0 ? 'pnl-negative' : 'pnl-flat'}>{formatR(parseR(trade.rMultiple))}</span>
+                        ) : trade.status === 'CLOSED' ? (
+                          <span className="journal-td-muted" title="R not logged — open the trade to add it">—</span>
+                        ) : <span className="journal-td-muted">—</span>}
                       </td>
                       <td className="journal-col-narrow-lg">
                         {priv ? (
@@ -394,6 +575,8 @@ function JournalPageContent() {
             </div>
           </div>
         )}
+        </div>
+        </div>
       </div>
 
       {/* Trade Drawer */}
@@ -401,7 +584,7 @@ function JournalPageContent() {
         <TradeDrawer 
           tradeId={selectedTradeId} 
           onClose={() => setSelectedTradeId(null)} 
-          onUpdate={() => fetchTrades()} 
+          onUpdate={refreshTrades} 
         />
       )}
 
@@ -409,9 +592,9 @@ function JournalPageContent() {
       {showImport && (
         <CsvImportWizard
           onClose={() => setShowImport(false)}
-          onImport={fetchTrades}
+          onImport={refreshTrades}
           onEmotionRate={(ids) => setEmotionTradeIds(ids)}
-          renderTradovate={(onBack) => <ImportModal onClose={() => setShowImport(false)} onBack={onBack} onImport={fetchTrades} onEmotionRate={(ids) => setEmotionTradeIds(ids)} />}
+          renderTradovate={(onBack) => <ImportModal onClose={() => setShowImport(false)} onBack={onBack} onImport={refreshTrades} onEmotionRate={(ids) => setEmotionTradeIds(ids)} />}
         />
       )}
       {emotionTradeIds && (

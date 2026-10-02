@@ -2,67 +2,77 @@ import nodemailer from 'nodemailer'
 import { prisma } from '@/lib/prisma'
 import { formatCurrency, tradeOutcome } from '@/lib/utils'
 import { toMoneyNumber, tradeOccurredAt } from '@/lib/money'
+import { buildDeepInsights } from '@/lib/roundupInsights'
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+const TPM_LIMIT = Number(process.env.GROQ_TPM_LIMIT) || 8000
 
 function getGroqKey() {
   return (process.env.GROQ_API_KEY || '').trim()
 }
 
-function parseNoteText(raw) {
-  if (!raw) return ''
-  try {
-    const p = JSON.parse(raw)
-    if (p?.html) return p.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400)
-  } catch {}
-  return String(raw).slice(0, 400)
-}
+const REPORT_SCHEMA = `{
+  "headline": "one blunt sentence verdict on the week",
+  "summary": "4-6 sentence executive summary: what happened, why, and the single biggest lever for next week",
+  "processScore": { "score": 0-100, "rationale": "grade the PROCESS (discipline, risk, rule-following), not the P&L" },
+  "keyNumbers": [ { "label": "metric name", "value": "the number", "read": "what it means for this trader (vs baseline only if one exists)" } ],
+  "strengths": ["specific thing done well, citing trades/numbers"],
+  "mistakes": ["specific costly mistake, citing trades, $ cost and the trigger"],
+  "patterns": "the most important recurring pattern across trades, with evidence",
+  "playbookReview": [ { "name": "playbook or setup", "verdict": "keep | refine | pause", "insight": "evidence-based why" } ],
+  "riskAudit": { "rating": "strong | mixed | weak", "points": ["stop usage, R-multiples, sizing vs usual, drawdown days, loss/win asymmetry"] },
+  "timing": [ { "window": "session / hour / weekday", "insight": "where edge shows up or leaks" } ],
+  "psychology": ["emotion-score and emotion-tag findings, tilt/revenge signs after losses, no-trade-day discipline"],
+  "lastWeekScorecard": [ { "item": "last week's focus item or rule", "status": "followed | partial | missed | unknown", "evidence": "..." } ],
+  "gamePlan": {
+    "primaryObjective": "the ONE process goal for next week",
+    "dailyMaxLoss": "hard stop in $ derived from their numbers, with reasoning",
+    "maxTradesPerDay": "number with reasoning",
+    "focusSetups": ["setups/symbols/windows to prioritize and why"],
+    "avoid": ["setups/symbols/windows/behaviors to cut and why"],
+    "rules": [ { "if": "concrete trigger", "then": "concrete action" } ],
+    "preMarketChecklist": ["short checklist items to do before each session"]
+  },
+  "watchlist": ["specific red flags to watch for in real time next week"],
+  "focus": ["3-5 top priorities for next week (short)"],
+  "mindset": "a direct, personal closing note on mindset for next week"
+}`
 
-export async function generateAiRoundupAnalysis(trades, stats) {
+export async function generateAiRoundupAnalysis(insights) {
   const key = getGroqKey()
   if (!key) {
     console.error('[WeeklyRoundup] No Groq API key found. Set GROQ_API_KEY in .env.local')
     return null
   }
-  console.log('[WeeklyRoundup] Calling Groq with', trades.length, 'trades')
+  console.log('[WeeklyRoundup] Calling Groq with', insights.trades.length, 'trades')
 
-  const tradeLines = trades.map((t, i) => {
-    const outcome = tradeOutcome(t.netPnl)
-    const pnl     = formatCurrency(toMoneyNumber(t.netPnl) ?? 0)
-    const emo     = t.emotionScore ? `emotion=${t.emotionScore}/5` : ''
-    let tags = []
-    try { tags = JSON.parse(t.tags || '[]') } catch {}
-    let emotionTags = []
-    try { emotionTags = JSON.parse(t.emotionTags || '[]') } catch {}
-    let mistakes = []
-    try { mistakes = JSON.parse(t.mistakes || '[]') } catch {}
-    const note = parseNoteText(t.notes)
-    return [
-      `Trade ${i + 1}: ${t.symbol} ${t.side} | ${outcome} ${pnl}`,
-      t.tradeSession                     ? `  Session: ${t.tradeSession}` : '',
-      t.playbook?.name                   ? `  Playbook: ${t.playbook.name}` : '',
-      tags.length                        ? `  Tags: ${tags.join(', ')}` : '',
-      emotionTags.length                 ? `  Emotions: ${emotionTags.join(', ')} ${emo}` : emo ? `  ${emo}` : '',
-      mistakes.length                    ? `  Mistakes logged: ${mistakes.join(', ')}` : '',
-      note                               ? `  Notes: ${note}` : '',
-    ].filter(Boolean).join('\n')
-  }).join('\n\n')
+  const prompt = `You are an elite trading performance coach doing a deep weekly review for a discretionary trader.
+You get pre-computed analytics (JSON) for the week, every trade with the trader's own journal notes, no-trade days, and — when they exist — a 4-week baseline and the previous week's plan.
 
-  const prompt = `You are an experienced trading coach reviewing a trader's week.
+ACCURACY (most important — a wrong claim destroys the trader's trust):
+- Only state facts that are in the data. Before writing any number, time, count or comparison, check it against the JSON. Never guess.
+- The journal notes are the trader's own account and the best source for strategy, intent, framework, and what really happened (e.g. several entries rolled into one row). Use them heavily and quote short phrases. Never invent rules, strategies, frameworks, risk limits or setups the trader didn't write.
+- Trades listing dataProblems have prices/side that contradict their P&L. Do not draw conclusions from those prices or their R; rely on P&L and notes, and mention the fix under mistakes or watchlist ("log each fill separately / correct the side").
+- baselinePrior4Weeks null = no trading history before this week. Do not compare to a baseline anywhere; say once in the summary that this is the first tracked week.
+- lastWeekPlan null = no previous plan. lastWeekScorecard must then be an empty array. If present, grade only its actual items.
+- For timing, quote the exact "entered" times/days instead of characterizing them (don't call 14:24 "late afternoon" vs 14:47 "early afternoon").
+- Missing fields mean not logged (no stopLogged = no stop recorded, not necessarily no stop placed — say "not logged").
+- Fewer correct, specific items beat padded lists. It is fine to return 1-2 items in a section, or an empty array when the data says nothing.
 
-WEEKLY STATS:
-- Trades: ${stats.totalTrades} | ${stats.winners}W ${stats.losers}L | Win rate: ${stats.winRate.toFixed(1)}%
-- Net P&L: ${formatCurrency(stats.netPnl)} | Avg per trade: ${formatCurrency(stats.avgPnl)}
-- Best: ${stats.bestTrade ? `${stats.bestTrade.symbol} ${formatCurrency(stats.bestTrade.netPnl || 0)}` : 'N/A'}
-- Worst: ${stats.worstTrade ? `${stats.worstTrade.symbol} ${formatCurrency(stats.worstTrade.netPnl || 0)}` : 'N/A'}
+DEPTH:
+- Separate process from outcome: a loss that followed the plan is not a mistake; a win that broke rules is.
+- Hunt for leaks: re-entries after losses, oversizing, missing stops, losers held longer than winners, entry times/sessions/days that lose, emotion scores tied to losses, patterns in the notes.
+- gamePlan must be concrete and measurable and derived from THIS trader's numbers and notes (e.g. dailyMaxLoss from their avg loss/worst day and any risk rule they wrote), never generic advice.
+- If data is thin, say what to log so next week's review is sharper.
 
-TRADES THIS WEEK:
-${tradeLines || 'No detailed trade data available.'}
+FIELD GLOSSARY: net = $ P&L. r = R-multiple from logged prices. holdMin = minutes held. sizeVsUsual = quantity ÷ their median size over the prior 4 weeks. entered = entry time in ${insights.timeZone}. emotion = self-rated 1 (out of control) to 5 (fully focused). Currency USD.
 
-Respond ONLY with valid JSON (no markdown, no code fences):
-{"strengths":["...","..."],"mistakes":["...","..."],"patterns":"...","focus":["...","..."],"mindset":"..."}
+ANALYTICS:
+${JSON.stringify(insights)}
 
-Be specific — reference actual symbols, P&L amounts, and emotions. Be direct, not generic.`
+Respond ONLY with a single JSON object matching this shape exactly (no markdown):
+${REPORT_SCHEMA}`
 
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
@@ -71,19 +81,32 @@ Be specific — reference actual symbols, P&L amounts, and emotions. Be direct, 
       'Authorization': `Bearer ${key}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      // Groq retires models; override with GROQ_MODEL without a code change.
+      model: (process.env.GROQ_MODEL || 'openai/gpt-oss-120b').trim(),
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.4,
-      max_tokens: 800,
+      temperature: 0.2,
+      // gpt-oss reasons before answering; reasoning tokens count toward max_tokens.
+      reasoning_effort: (process.env.GROQ_REASONING_EFFORT || 'medium').trim(),
+      response_format: { type: 'json_object' },
+      // Groq rejects a request when prompt + max_tokens exceeds the per-minute
+      // token limit (8k on the free tier), so give output whatever the prompt leaves.
+      max_tokens: Math.max(2500, TPM_LIMIT - Math.ceil(prompt.length / 3) - 150),
     }),
   })
 
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     console.error('[WeeklyRoundup] Groq API error', res.status, JSON.stringify(data))
+    if (res.status === 429 || res.status === 413) {
+      const wait = /try again in ([\d.]+)s/i.exec(data?.error?.message || '')?.[1]
+      const err = new Error(`The AI coach is rate-limited right now (Groq free tier). Try again in ${wait ? Math.ceil(Number(wait)) : 60} seconds.`)
+      err.userFacing = true
+      throw err
+    }
     return null
   }
 
+  console.log('[WeeklyRoundup] Groq usage', JSON.stringify({ ...data?.usage, finish: data?.choices?.[0]?.finish_reason }))
   const text  = data?.choices?.[0]?.message?.content || ''
   const clean = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/s, '').trim()
 
@@ -295,7 +318,14 @@ export async function createAndSendWeeklyRoundup(user, { force = false, previewO
   const subject = buildSubject(user.name, data)
   const summaryText = buildSummaryText(user.name, data)
   const summaryHtml = buildSummaryHtml(user.name, data, reflectionPrompt)
-  const aiAnalysis = await generateAiRoundupAnalysis(data.trades, data).catch(() => null)
+  const aiAnalysis = await buildDeepInsights(user.id, data.trades, data)
+    .then(generateAiRoundupAnalysis)
+    .catch((e) => {
+      console.error('[WeeklyRoundup] AI analysis failed:', e)
+      // Manual generate/regenerate: surface it instead of saving an empty round-up.
+      if (force && e.userFacing) throw e
+      return null
+    })
 
   if (!previewOnly) {
     await sendEmail({

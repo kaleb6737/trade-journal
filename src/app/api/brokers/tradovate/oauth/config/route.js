@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { isTradovateOAuthConfigured } from '@/lib/tradovateOAuth'
+import { tradovateAppCredentials } from '@/lib/tradovateSync'
 
 /** Public: whether server has OAuth client credentials (no secrets returned). */
 export async function GET() {
-  return NextResponse.json({ configured: isTradovateOAuthConfigured() })
+  return NextResponse.json({ configured: isTradovateOAuthConfigured(), appCredentials: !!tradovateAppCredentials() })
 }

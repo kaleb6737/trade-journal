@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
-import { Check, Sparkles, ArrowLeft, LogIn, LogOut } from 'lucide-react'
+import { Check, Sparkles, ArrowLeft, LogIn, LogOut, ShieldCheck, RotateCcw, Zap } from 'lucide-react'
 import { BrandMonogram, BrandWordmark } from '@/components/BrandWordmark'
 import { ESSENCE_PRICING as P } from '@/lib/essenceOffer'
 
@@ -93,14 +93,11 @@ function PricingPageInner({ launch }) {
   const tiers = ['ULTIMATE']
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
+    <div className="pricing-shell">
+      <div className="pricing-atmosphere" />
+
       {/* Minimal top nav */}
-      <div style={{
-        position: 'sticky', top: 0, zIndex: 10,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px 24px', borderBottom: '1px solid var(--border-subtle)',
-        background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(12px)',
-      }}>
+      <div className="pricing-nav">
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit' }}>
           <BrandMonogram />
           <BrandWordmark />
@@ -122,163 +119,140 @@ function PricingPageInner({ launch }) {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1040, margin: '0 auto', padding: '48px 24px 80px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <Link href={isAuthed ? '/dashboard' : '/'} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)', textDecoration: 'none', marginBottom: 20 }}>
+      <div className="pricing-content">
+        <div className="pricing-hero">
+          <Link href={isAuthed ? '/dashboard' : '/'} className="pricing-back">
             <ArrowLeft size={14} /> {isAuthed ? 'Back to dashboard' : 'Back to home'}
           </Link>
-          <h1 style={{ fontSize: 42, fontWeight: 800, marginBottom: 10 }}>Full access. One simple plan.</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: 15, maxWidth: 560, margin: '0 auto' }}>
+          <span className="pricing-eyebrow">Pricing</span>
+          <h1 className="pricing-title">
+            Full access. <span className="gradient-text">One simple plan.</span>
+          </h1>
+          <p className="pricing-subtitle">
             Choose monthly or yearly billing. Both include the full product, with no feature tiers.
           </p>
         </div>
 
         {qpPaywall === '1' && (
-          <div style={{
-            background: 'rgba(232, 198, 106,0.1)', border: '1px solid rgba(232, 198, 106,0.35)',
-            color: 'var(--gold-primary)', borderRadius: 10, padding: '12px 14px',
-            marginBottom: 20, fontSize: 13, textAlign: 'center',
-          }}>
+          <div className="pricing-banner pricing-banner--info">
             Your account is currently on Free — upgrade to unlock the journal, analytics, and broker sync.
           </div>
         )}
         {qpCancel && (
-          <div style={{
-            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)',
-            color: 'var(--red)', borderRadius: 10, padding: '10px 14px',
-            marginBottom: 20, fontSize: 13, textAlign: 'center',
-          }}>
+          <div className="pricing-banner pricing-banner--error">
             Checkout canceled. No charge was made.
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
-          <div role="tablist" aria-label="Billing interval" style={{
-            display: 'inline-flex', padding: 4, borderRadius: 999,
-            border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)',
-          }}>
+        <div className="pricing-toggle-wrap">
+          <div className="pricing-toggle" role="tablist" aria-label="Billing interval">
+            <div className="pricing-toggle-pill" style={{ transform: interval === 'year' ? 'translateX(100%)' : 'translateX(0)' }} />
             {['month', 'year'].map((k) => (
               <button
                 key={k}
                 role="tab"
                 aria-selected={interval === k}
+                data-active={interval === k}
                 onClick={() => { setInterval(k); setError('') }}
                 disabled={Boolean(busyPlan)}
-                className={`btn ${interval === k ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ padding: '8px 18px', borderRadius: 999, minHeight: 0 }}
+                className="pricing-toggle-btn"
               >
                 {k === 'month' ? 'Monthly' : 'Yearly'}
                 {k === 'year' && (
-                  <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--gold-primary)' }}>{launch.status === 'ended' ? 'save $81' : 'launch offer'}</span>
+                  <span className="pricing-toggle-badge">{launch.status === 'ended' ? 'Save $81' : 'Launch offer'}</span>
                 )}
               </button>
             ))}
           </div>
         </div>
 
-        {error && (
-          <div style={{
-            background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
-            color: 'var(--red)', borderRadius: 10, padding: '10px 14px',
-            marginBottom: 16, fontSize: 13, textAlign: 'center',
-          }}>
-            {error}
-          </div>
-        )}
+        {error && <div className="pricing-banner pricing-banner--error" style={{ maxWidth: 440 }}>{error}</div>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, maxWidth: 520, margin: '0 auto' }}>
+        <div className="pricing-card-wrap">
           {tiers.map((plan) => {
             const d = OFFER
             const price = priceFor(plan)
-            const isFeatured = true
             const isCurrent = isAuthed && currentPlan !== 'FREE'
             return (
-              <div key={plan} className="card" style={{
-                display: 'flex', flexDirection: 'column', gap: 16, position: 'relative',
-                border: isFeatured ? '1px solid var(--gold-primary)' : '1px solid var(--border-subtle)',
-                boxShadow: isFeatured ? '0 10px 30px -15px rgba(232, 198, 106,0.35)' : undefined,
-              }}>
-                {isFeatured && (
-                  <div style={{
-                    position: 'absolute', top: -10, left: 16,
-                    background: 'var(--gold-primary)', color: '#000',
-                    fontWeight: 800, fontSize: 11, letterSpacing: 0.5,
-                    padding: '3px 8px', borderRadius: 6, textTransform: 'uppercase',
-                  }}>
-                    {founding ? 'Founding offer' : 'Full access'}
-                  </div>
+              <div key={plan} className="pricing-card">
+                <span className="pricing-ribbon">
+                  {founding ? <><Sparkles size={12} /> Founding offer</> : <><ShieldCheck size={12} /> Full access</>}
+                </span>
+
+                <h2 className="pricing-card-title">{d.name}</h2>
+                <p className="pricing-card-tagline">{d.tagline}</p>
+
+                <div className="pricing-price-row">
+                  <span className="pricing-price-amount">${price.amount}</span>
+                  {founding && <span className="pricing-price-strike">${P.annual}</span>}
+                  <span className="pricing-price-suffix">{price.suffix} USD</span>
+                </div>
+                {founding && (
+                  <span className="pricing-savings-badge">
+                    <Zap size={12} /> Save ${P.discount} in year one
+                  </span>
                 )}
 
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: 18 }}>{d.name}</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>{d.tagline}</div>
-                </div>
-
-                <div>
-                  <span style={{ fontSize: 32, fontWeight: 800 }}>${price.amount}</span>
-                  <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 13 }}>{price.suffix} USD</span>
-                </div>
-
-                <p style={{ color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.6 }}>
+                <p className="pricing-billing-note">
                   {interval === 'month' ? '$15 billed monthly.' : founding ? '$59 billed upfront. Renews at $99/year.' : '$99 billed annually.'} Cancel renewal anytime. Taxes may apply.
                   {founding && <><br />{launch.status === 'active' ? `Founding enrollment ends ${new Date(launch.endsAt).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric' })} (UTC).` : 'Planned for the first 30 days of launch. Enrollment is not open yet.'}</>}
                 </p>
 
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="pricing-divider" />
+
+                <ul className="pricing-features">
                   {d.highlights.map((h) => (
-                    <li key={h} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13.5 }}>
-                      <Check size={16} style={{ color: 'var(--gold-primary)', flexShrink: 0, marginTop: 2 }} />
+                    <li key={h} className="pricing-feature">
+                      <span className="pricing-feature-icon"><Check size={12} strokeWidth={3} /></span>
                       <span>{h}</span>
                     </li>
                   ))}
                 </ul>
 
-                <div style={{ marginTop: 'auto', paddingTop: 8 }}>
-                  {isCurrent ? (
-                    <button
-                      className="btn btn-ghost"
-                      onClick={openPortal}
-                      disabled={busyPlan === 'portal'}
-                      style={{ width: '100%', justifyContent: 'center' }}
-                    >
-                      {busyPlan === 'portal' ? 'Opening…' : 'Manage billing'}
-                    </button>
-                  ) : (
-                    <button
-                      className={`btn ${isFeatured ? 'btn-primary' : 'btn-ghost'}`}
-                      onClick={() => pickPlan(plan)}
-                      disabled={Boolean(busyPlan) || loading || status === 'loading' || preview}
-                      style={{ width: '100%', justifyContent: 'center' }}
-                    >
-                      {busyPlan === plan ? 'Redirecting…' : preview ? 'Founding enrollment opens at launch' : (
-                        <>
-                          <Sparkles size={15} />
-                          {!isAuthed
-                            ? `Get ${d.name}`
-                            : currentPlan === 'FREE'
-                              ? `Upgrade to ${d.name}`
-                              : `Switch to ${d.name}`}
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
+                {isCurrent ? (
+                  <button
+                    className="btn btn-ghost pricing-btn"
+                    onClick={openPortal}
+                    disabled={busyPlan === 'portal'}
+                  >
+                    {busyPlan === 'portal' ? 'Opening…' : 'Manage billing'}
+                  </button>
+                ) : (
+                  <button
+                    className="btn pricing-cta pricing-btn"
+                    onClick={() => pickPlan(plan)}
+                    disabled={Boolean(busyPlan) || loading || status === 'loading' || preview}
+                  >
+                    {busyPlan === plan ? 'Redirecting…' : preview ? 'Founding enrollment opens at launch' : (
+                      <>
+                        <Sparkles size={15} />
+                        {!isAuthed
+                          ? `Get ${d.name}`
+                          : currentPlan === 'FREE'
+                            ? `Upgrade to ${d.name}`
+                            : `Switch to ${d.name}`}
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             )
           })}
         </div>
 
+        <div className="pricing-trust-row">
+          <span className="pricing-trust-item"><ShieldCheck size={14} /> Secured by Stripe</span>
+          <span className="pricing-trust-item"><RotateCcw size={14} /> Cancel anytime</span>
+          <span className="pricing-trust-item"><Zap size={14} /> Instant access</span>
+        </div>
+
         {isAuthed && currentPlan !== 'FREE' && (
-          <div style={{ textAlign: 'center', marginTop: 28 }}>
+          <div className="pricing-manage">
             <button className="btn btn-ghost btn-sm" onClick={openPortal} disabled={busyPlan === 'portal'}>
               {busyPlan === 'portal' ? 'Opening…' : 'Manage billing / cancel'}
             </button>
           </div>
         )}
-
-        <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 32, textAlign: 'center' }}>
-          Payments processed securely by Stripe. Cancel anytime from the billing portal.
-        </p>
       </div>
     </div>
   )

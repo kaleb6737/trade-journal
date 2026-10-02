@@ -2,14 +2,14 @@
 
 import { useState, Fragment } from 'react'
 import Link from 'next/link'
-import { formatCurrency, toDateKeyInTimeZone, tradeStatsTimeZone } from '@/lib/utils'
+import { formatCurrency, toDateKeyInTimeZone, tradeStatsTimeZone, tradeOutcome } from '@/lib/utils'
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
 
 const CAL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const CAL_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const CAL_DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-export default function PnLCalendar({ calendar = {}, statsTimeZone: statsTimeZoneProp }) {
+export default function PnLCalendar({ calendar = {}, noTradeDays = {}, statsTimeZone: statsTimeZoneProp }) {
   const statsTimeZone = statsTimeZoneProp ?? tradeStatsTimeZone()
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -47,22 +47,25 @@ export default function PnLCalendar({ calendar = {}, statsTimeZone: statsTimeZon
   const monthTrades = Object.entries(calendar)
     .filter(([k]) => k.startsWith(monthKey))
     .reduce((s, [, v]) => s + v.count, 0)
-  const winDays = Object.entries(calendar).filter(([k]) => k.startsWith(monthKey) && calendar[k].pnl > 0).length
-  const lossDays = Object.entries(calendar).filter(([k]) => k.startsWith(monthKey) && calendar[k].pnl < 0).length
+  const winDays = Object.entries(calendar).filter(([k]) => k.startsWith(monthKey) && tradeOutcome(calendar[k].pnl) === 'WIN').length
+  const lossDays = Object.entries(calendar).filter(([k]) => k.startsWith(monthKey) && tradeOutcome(calendar[k].pnl) === 'LOSS').length
 
-  const cellBg = (pnl) => {
-    if (!pnl) return undefined
+  const cellBg = (outcome, pnl) => {
+    if (outcome === 'BE') return 'rgba(232, 198, 106, 0.1)'
+    if (!outcome) return undefined
     const a = Math.abs(pnl) < 200 ? 0.14 : Math.abs(pnl) < 1000 ? 0.26 : 0.42
-    return pnl > 0 ? `rgba(34,197,94,${a})` : `rgba(239,68,68,${a})`
+    return outcome === 'WIN' ? `rgba(34,197,94,${a})` : `rgba(239,68,68,${a})`
   }
-  const cellBorder = (pnl) => {
-    if (!pnl) return undefined
-    return pnl > 0 ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'
+  const cellBorder = (outcome) => {
+    if (outcome === 'BE') return 'rgba(232, 198, 106, 0.35)'
+    if (!outcome) return undefined
+    return outcome === 'WIN' ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'
   }
 
-  const fmtTooltip = (day, data) => {
+  const fmtTooltip = (day, data, noTrade, outcome) => {
     const base = `${CAL_SHORT[month]} ${day}`
-    if (!data) return base
+    if (!data) return noTrade ? `${base}  ·  No-trade day${noTrade.reason ? ` — ${noTrade.reason}` : ''}` : base
+    if (outcome === 'BE') return `${base}  ·  Breakeven  ·  ${data.count} trade${data.count !== 1 ? 's' : ''}`
     const sign = data.pnl >= 0 ? '+' : ''
     return `${base}  ·  ${sign}${formatCurrency(data.pnl)}  ·  ${data.count} trade${data.count !== 1 ? 's' : ''}`
   }
@@ -112,10 +115,13 @@ export default function PnLCalendar({ calendar = {}, statsTimeZone: statsTimeZon
             {week.map((day, di) => {
               const data = getData(day)
               const key = getKey(day)
+              // Real trade data (even a $0 breakeven day) always wins over a logged no-trade note.
+              const noTrade = !data && key ? noTradeDays[key] : null
+              const outcome = data ? tradeOutcome(data.pnl) : null
               const isToday = key === todayKey
               const idx = wi * 7 + di
               const CellWrapper = day ? Link : 'div'
-              const wrapperProps = day ? { href: data?.tradeId ? `/journal/${data.tradeId}` : `/journal?date=${key}` } : {}
+              const wrapperProps = day ? { href: data?.tradeId ? `/journal/${data.tradeId}` : noTrade?.id ? `/journal/no-trade/${noTrade.id}` : `/journal?date=${key}` } : {}
 
               return (
                 <CellWrapper
@@ -125,33 +131,37 @@ export default function PnLCalendar({ calendar = {}, statsTimeZone: statsTimeZon
                     'pnl-cal-cell',
                     !day ? 'pnl-cal-cell--empty' : '',
                     isToday ? 'pnl-cal-cell--today' : '',
-                    data?.pnl > 0 ? 'pnl-cal-cell--win' : '',
-                    data?.pnl < 0 ? 'pnl-cal-cell--loss' : '',
+                    outcome === 'WIN' ? 'pnl-cal-cell--win' : '',
+                    outcome === 'LOSS' ? 'pnl-cal-cell--loss' : '',
+                    outcome === 'BE' ? 'pnl-cal-cell--be' : '',
+                    noTrade ? 'pnl-cal-cell--notrade' : '',
                     day ? 'cursor-pointer hover:ring-2 hover:ring-[var(--gold-primary)] transition-all' : ''
                   ]
                     .filter(Boolean)
                     .join(' ')}
                   style={{
                     '--cell-idx': idx,
-                    background: data ? cellBg(data.pnl) : undefined,
-                    borderColor: data ? cellBorder(data.pnl) : undefined,
+                    background: data ? cellBg(outcome, data.pnl) : undefined,
+                    borderColor: data ? cellBorder(outcome) : undefined,
                     textDecoration: 'none',
                     color: 'inherit'
                   }}
-                  data-tooltip={day ? fmtTooltip(day, data) : undefined}
+                  data-tooltip={day ? fmtTooltip(day, data, noTrade, outcome) : undefined}
                 >
                   {day && (
                     <>
                       <span className="pnl-cal-day-num">{day}</span>
                       {data ? (
                         <span className="pnl-cal-day-body">
-                          <span className={`pnl-cal-day-pnl ${data.pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}`}>
-                            {formatCurrency(data.pnl)}
+                          <span className={`pnl-cal-day-pnl ${outcome === 'WIN' ? 'pnl-positive' : outcome === 'LOSS' ? 'pnl-negative' : 'pnl-flat'}`}>
+                            {outcome === 'BE' ? 'BE' : formatCurrency(data.pnl)}
                           </span>
                           <span className="pnl-cal-day-trades">{data.count}t</span>
                         </span>
+                      ) : noTrade ? (
+                        <span className="pnl-cal-day-notrade">flat</span>
                       ) : null}
-                      {data?.pnl > 0 && <span className="pnl-cal-shimmer" aria-hidden />}
+                      {outcome === 'WIN' && <span className="pnl-cal-shimmer" aria-hidden />}
                     </>
                   )}
                 </CellWrapper>

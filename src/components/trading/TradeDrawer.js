@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import NotesEditor, { NotesDisplay, parseNotes } from '@/components/NotesEditor'
+import RInput from '@/components/trading/RInput'
+import { formatR, parseR } from '@/lib/rMultiple'
 import { formatCurrency, formatDate, formatPercent, parseTags, getHoldTime, ASSET_TYPES, TRADE_SIDES, toMoneyNumber, tradeOutcome } from '@/lib/utils'
 import { Trash2, Edit, Save, X, ExternalLink, Eye, EyeOff } from 'lucide-react'
 
@@ -52,6 +54,7 @@ export default function TradeDrawer({ tradeId, onClose, onUpdate }) {
       notes: trade.notes || '', playbookId: trade.playbookId || '', accountId: trade.accountId || '',
       tradeSession: trade.tradeSession || '',
       tags, tagInput: '', manualPnl: hasManualPnl ? trade.netPnl : '',
+      rMultiple: trade.rMultiple != null ? String(trade.rMultiple) : '',
     })
     setUseManualPnl(hasManualPnl)
     setEditing(true)
@@ -229,6 +232,12 @@ export default function TradeDrawer({ tradeId, onClose, onUpdate }) {
                         </div>
                       </div>
                       <div>
+                        <div className="stat-label">R Multiple</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 700, fontFamily: 'Space Grotesk', color: trade.rMultiple == null ? 'var(--text-muted)' : parseR(trade.rMultiple) > 0 ? 'var(--green)' : parseR(trade.rMultiple) < 0 ? 'var(--red)' : 'var(--gold-primary)' }}>
+                          {trade.rMultiple != null ? formatR(parseR(trade.rMultiple)) : <button type="button" className="pb-link" style={{ fontSize: '0.85rem' }} onClick={startEdit}>+ Log R</button>}
+                        </div>
+                      </div>
+                      <div>
                         <div className="stat-label">Return %</div>
                         <div style={{ fontSize: '1.1rem', fontWeight: 700, color: trade.returnPercent == null ? 'var(--text-muted)' : (trade.netPnl != null && tradeOutcome(trade.netPnl) === 'BE') ? 'var(--gold-primary)' : trade.returnPercent >= 0 ? 'var(--green)' : 'var(--red)' }}>
                           {trade.returnPercent != null ? formatPercent(trade.returnPercent) : '—'}
@@ -388,6 +397,16 @@ export default function TradeDrawer({ tradeId, onClose, onUpdate }) {
                       {useManualPnl && (
                         <input type="number" step="0.01" className="form-input" placeholder="Net P&L..." value={form.manualPnl} onChange={set('manualPnl')} />
                       )}
+                    </div>
+
+                    <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-input)', borderRadius: 8, border: '1px solid var(--border-default)' }}>
+                      <RInput
+                        compact
+                        value={form.rMultiple}
+                        onChange={(v) => setForm(p => ({ ...p, rMultiple: v }))}
+                        pnl={useManualPnl && form.manualPnl !== '' ? parseFloat(form.manualPnl) : trade.netPnl}
+                        suggestion={{ side: form.side, entryPrice: form.entryPrice, exitPrice: form.exitPrice, stopLoss: form.stopLoss }}
+                      />
                     </div>
                   </div>
 

@@ -1,19 +1,13 @@
 import { prisma } from '@/lib/prisma'
 import { syncAlpacaAccount } from '@/lib/alpacaSync'
-import { syncTradovateAccount } from '@/lib/tradovateSync'
+import { hasTradovatePasswordLogin, syncTradovateAccount } from '@/lib/tradovateSync'
 
 export function accountEligibleForAutoSync(acc) {
   if (!acc.brokerAutoSyncEnabled) return false
   if (acc.broker === 'Alpaca' && acc.alpacaKeyId && acc.alpacaSecretEnc) return true
   if (acc.broker === 'Tradovate') {
     const oauth = !!acc.tradovateOAuthAccessEnc
-    const legacy = !!(
-      acc.tradovateName &&
-      acc.tradovatePasswordEnc &&
-      acc.tradovateCid != null &&
-      acc.tradovateSecEnc
-    )
-    return oauth || legacy
+    return oauth || hasTradovatePasswordLogin(acc)
   }
   return false
 }
@@ -33,12 +27,7 @@ export async function runAutoSyncForAccount(userId, acc) {
   }
 
   const tvOAuth = !!acc.tradovateOAuthAccessEnc
-  const tvLegacy = !!(
-    acc.tradovateName &&
-    acc.tradovatePasswordEnc &&
-    acc.tradovateCid != null &&
-    acc.tradovateSecEnc
-  )
+  const tvLegacy = hasTradovatePasswordLogin(acc)
   if (acc.broker === 'Tradovate' && (tvOAuth || tvLegacy)) {
     const result = await syncTradovateAccount(userId, acc)
     await prisma.tradingAccount.update({

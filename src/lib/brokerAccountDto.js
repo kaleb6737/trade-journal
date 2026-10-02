@@ -1,3 +1,5 @@
+import { hasTradovatePasswordLogin } from '@/lib/tradovateSync'
+
 export function sanitizeTradingAccount(a) {
   if (!a) return null
   const {
@@ -10,12 +12,7 @@ export function sanitizeTradingAccount(a) {
   } = a
   const name = rest.tradovateName
   const oauth = !!tradovateOAuthAccessEnc
-  const creds = !!(
-    name &&
-    tradovatePasswordEnc &&
-    rest.tradovateCid != null &&
-    tradovateSecEnc
-  )
+  const creds = hasTradovatePasswordLogin(a)
   return {
     ...rest,
     alpacaConnected: !!(alpacaKeyId && alpacaSecretEnc),

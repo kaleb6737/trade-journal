@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { createAndSendWeeklyRoundup, isDueForWeeklyRoundup } from '@/lib/weeklyRoundup'
 import { isCronAuthorized } from '@/lib/cronAuth'
 
+// Each user's deep AI review takes ~20-30s; Vercel's default function timeout is shorter.
+export const maxDuration = 60
+
 export async function POST(req) {
   if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

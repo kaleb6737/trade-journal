@@ -7,6 +7,8 @@ import NotesEditor, { NotesDisplay, parseNotes } from '@/components/NotesEditor'
 import { formatCurrency, formatDate, formatPercent, parseTags, getHoldTime, ASSET_TYPES, TRADE_SIDES, toMoneyNumber, tradeOutcome } from '@/lib/utils'
 import { ArrowLeft, Trash2, Edit, Save, X, Eye, EyeOff } from 'lucide-react'
 import EmotionCheckIn, { EmotionDisplay } from '@/components/trading/EmotionCheckIn'
+import RInput from '@/components/trading/RInput'
+import { formatR, parseR } from '@/lib/rMultiple'
 
 export default function TradeDetailPage({ params }) {
   const { id } = params
@@ -49,6 +51,7 @@ export default function TradeDetailPage({ params }) {
       notes: trade.notes || '', playbookId: trade.playbookId || '', accountId: trade.accountId || '',
       tradeSession: trade.tradeSession || '',
       tags, tagInput: '', manualPnl: hasManualPnl ? trade.netPnl : '',
+      rMultiple: trade.rMultiple != null ? String(trade.rMultiple) : '',
     })
     setUseManualPnl(hasManualPnl)
     setEditing(true)
@@ -201,6 +204,7 @@ export default function TradeDetailPage({ params }) {
                           : 'var(--red)'
                   return [
                   { label: 'Net P&L', value: trade.netPnl != null ? formatCurrency(trade.netPnl) : '—', color: pnlColor },
+                  { label: 'R Multiple', value: trade.rMultiple != null ? formatR(parseR(trade.rMultiple)) : 'Not logged', color: trade.rMultiple == null ? 'var(--text-muted)' : parseR(trade.rMultiple) > 0 ? 'var(--green)' : parseR(trade.rMultiple) < 0 ? 'var(--red)' : 'var(--gold-primary)' },
                   { label: 'Gross P&L', value: trade.grossPnl != null ? formatCurrency(trade.grossPnl) : '—', color: 'var(--text-primary)' },
                   { label: 'Return %', value: trade.returnPercent != null ? formatPercent(trade.returnPercent) : '—', color: retColor },
                   { label: 'Hold Time', value: getHoldTime(trade.entryDate, trade.exitDate), color: 'var(--text-primary)' },
@@ -402,6 +406,12 @@ export default function TradeDetailPage({ params }) {
                 ) : (
                   <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>P&L will be auto-calculated from prices</div>
                 )}
+                <RInput
+                  value={form.rMultiple}
+                  onChange={(v) => setForm(p => ({ ...p, rMultiple: v }))}
+                  pnl={useManualPnl && form.manualPnl !== '' ? parseFloat(form.manualPnl) : trade.netPnl}
+                  suggestion={{ side: form.side, entryPrice: form.entryPrice, exitPrice: form.exitPrice, stopLoss: form.stopLoss }}
+                />
               </div>
 
             </div>

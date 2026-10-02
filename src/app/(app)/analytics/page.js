@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import MarketPulse from '@/components/trading/MarketPulse'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, AreaChart, Area
@@ -10,6 +9,11 @@ import {
 import { formatCurrency, formatPercent, computeStats, buildEquityCurve, buildDayOfWeekData, buildSessionData, buildSymbolData, buildPlaybookStats, ASSET_COLORS, parseTags, tradeDate, toMoneyNumber, tradeOutcome } from '@/lib/utils'
 import { tradesForAggregations } from '@/lib/tradePrivacy'
 import { TrendingUp, TrendingDown, Activity, Target, Award, BookOpen } from 'lucide-react'
+import RAnalytics, { RSummaryStrip } from '@/components/analytics/RAnalytics'
+import { buildRStats } from '@/lib/rMultiple'
+import EdgeLab from '@/components/analytics/EdgeLab'
+import { filterAnalyticsTrades } from '@/lib/edgeAnalytics'
+import edgeStyles from '@/components/analytics/EdgeLab.module.css'
 
 const CHART_COLORS = ['#E8C66A', '#22C55E', '#3B82F6', '#8B5CF6', '#EC4899', '#F97316', '#06B6D4']
 
@@ -45,23 +49,49 @@ function PlaybookWinRateTooltip({ active, payload }) {
 }
 
 export default function AnalyticsPage() {
-  const [trades, setTrades] = useState([])
+  const [allTrades, setTrades] = useState([])
+  const [accounts, setAccounts] = useState([])
+  const [error, setError] = useState('')
+  const [reload, setReload] = useState(0)
+  const [filters, setFilters] = useState({ from: '', to: '', symbol: '', side: '', playbook: '', account: '' })
+  const trades = useMemo(() => filterAnalyticsTrades(allTrades, filters), [allTrades, filters])
+  const setFilter = (key, value) => setFilters(current => ({ ...current, [key]: value }))
   const [playbooks, setPlaybooks] = useState([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('overview')
+  const [tab, setTab] = useState('edge')
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/trades').then((r) => r.json()),
-      fetch('/api/playbooks').then((r) => r.json()),
-    ])
-      .then(([td, pd]) => {
-        setTrades(tradesForAggregations(td.trades || []))
+    const controller = new AbortController()
+    const read = async (url) => {
+      const response = await fetch(url, { signal: controller.signal })
+      if (!response.ok) throw new Error(response.status === 401 ? 'Your session expired. Sign in again to load analytics.' : 'Analytics could not be loaded. Please retry.')
+      return response.json()
+    }
+    const loadTrades = async () => {
+      let rows = [], offset = 0
+      while (true) {
+        const page = await read(`/api/trades?limit=1000&offset=${offset}`)
+        if (!Array.isArray(page.trades) || !Number.isFinite(page.total)) throw new Error('Unexpected trade response. Please retry.')
+        rows.push(...page.trades)
+        offset += page.trades.length
+        if (offset >= page.total) break
+        if (!page.trades.length) throw new Error('Incomplete trade history. Please retry.')
+      }
+      return [...new Map(rows.map(t => [t.id, t])).values()]
+    }
+    setLoading(true)
+    setError('')
+    Promise.all([loadTrades(), read('/api/playbooks'), read('/api/accounts')])
+      .then(([td, pd, ad]) => {
+        if (controller.signal.aborted) return
+        setTrades(tradesForAggregations(td))
         setPlaybooks(pd.playbooks || [])
+        setAccounts(ad.accounts || [])
       })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+      .catch(err => { if (!controller.signal.aborted) setError(err.message) })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
+  }, [reload])
 
   const closed = trades.filter(t => t.status === 'CLOSED' && t.netPnl != null && toMoneyNumber(t.netPnl) != null)
   const stats = computeStats(trades)
@@ -69,6 +99,7 @@ export default function AnalyticsPage() {
   const dayOfWeek = buildDayOfWeekData(trades)
   const sessionData = buildSessionData(trades)
   const symbolData = buildSymbolData(trades)
+  const rStats = buildRStats(trades, { playbookName: (id) => playbooks.find((p) => p.id === id)?.name })
 
   // Asset type breakdown
   const assetBreakdown = Object.entries(
@@ -150,6 +181,8 @@ export default function AnalyticsPage() {
   if (flatTrades > 0) playbookPieData.push({ name: 'Trades in flat playbooks', value: flatTrades, fill: 'rgba(148, 163, 184, 0.75)' })
 
   const TABS = [
+    { id: 'edge', label: 'Edge Lab' },
+    { id: 'r', label: 'R-Multiple' },
     { id: 'overview', label: 'Overview' },
     { id: 'performance', label: 'Performance' },
     { id: 'symbols', label: 'Symbols' },
@@ -178,16 +211,27 @@ export default function AnalyticsPage() {
           <div className="page-header-text">
             <span className="page-eyebrow">Intelligence</span>
             <h1 className="page-title-xl">Analytics</h1>
-            <p className="page-subtitle">Cross-examine win rate, equity, symbols, and timing — the same lens prop desks use to review books.</p>
+            <p className="page-subtitle">Your trading research desk. Measure in R, investigate the conditions, and put your edge to the test.</p>
           </div>
         </div>
 
-        <MarketPulse />
+        {error ? <div className={edgeStyles.error} role="alert"><p>{error}</p><button className={edgeStyles.button} onClick={() => setReload(n => n + 1)}>Retry analytics</button></div> : null}
+        <div className={edgeStyles.filters} aria-label="Analytics filters">
+          <label>From<input type="date" value={filters.from} max={filters.to || undefined} onChange={e => setFilter('from', e.target.value)} /></label>
+          <label>Through<input type="date" value={filters.to} min={filters.from || undefined} onChange={e => setFilter('to', e.target.value)} /></label>
+          <label>Account<select value={filters.account} onChange={e => setFilter('account', e.target.value)}><option value="">All accounts</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+          <label>Symbol<select value={filters.symbol} onChange={e => setFilter('symbol', e.target.value)}><option value="">All symbols</option>{[...new Set(allTrades.map(t => t.symbol))].sort().map(symbol => <option key={symbol}>{symbol}</option>)}</select></label>
+          <label>Direction<select value={filters.side} onChange={e => setFilter('side', e.target.value)}><option value="">Both directions</option><option value="LONG">Long</option><option value="SHORT">Short</option></select></label>
+          <label>Playbook<select value={filters.playbook} onChange={e => setFilter('playbook', e.target.value)}><option value="">All playbooks</option>{playbooks.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+          <button className={edgeStyles.button} onClick={() => setFilters({ from: '', to: '', symbol: '', side: '', playbook: '', account: '' })}>Reset</button>
+          <div className={edgeStyles.filterMeta}><span>{trades.length} of {allTrades.length} visible trades · filters apply to every view</span><span>Local dates · closed trades drive performance</span></div>
+          {filters.from && filters.to && filters.from > filters.to ? <p role="alert">The start date must be on or before the end date.</p> : null}
+        </div>
 
         {/* Tabs */}
-        <div className="tabs" style={{ marginBottom: 28 }}>
+        <div className="tabs" style={{ marginBottom: 28, overflowX: 'auto' }}>
           {TABS.map(t => (
-            <button key={t.id} className={`tab ${tab === t.id ? 'active gold' : ''}`} onClick={() => setTab(t.id)}>
+            <button key={t.id} className={`tab ${tab === t.id ? 'active gold' : ''}`} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>
               {t.label}
             </button>
           ))}
@@ -201,8 +245,13 @@ export default function AnalyticsPage() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
           >
+        {tab === 'edge' && !error && <EdgeLab trades={trades} playbooks={playbooks} />}
+        {tab === 'r' && <RAnalytics r={rStats} />}
+
         {tab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <RSummaryStrip r={rStats} onOpen={() => setTab('r')} />
+
             {/* Summary Cards */}
             <div className="grid-stats">
               {[
